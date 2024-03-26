@@ -1,0 +1,12 @@
+cr.trace
+*.o
+script_out*
+.gdb_history
+cscope*
+func_latency
+tags
+*.swp
+*.o.cmd
+*.so
+*.d
+.session.xrb
