@@ -1,5 +1,9 @@
 FUNC_LATENCY = func_latency
 PERF = perf
+PREFIX = /usr/share/pt_perf
+DEBUG = 0
+INSTALL = install
+ECHO = echo
 
 all: $(PERF) $(FUNC_LATENCY)
 
@@ -7,9 +11,11 @@ all: $(PERF) $(FUNC_LATENCY)
 kernelversion:
 	@echo "6"
 
+PERF_DIR = tools/perf
+
 $(PERF): 
-	$(MAKE) -C tools/perf
-	mv tools/perf/$(PERF) ./
+	$(MAKE) -C $(PERF_DIR) DEBUG=$(DEBUG)
+	mv $(PERF_DIR)/$(PERF) ./
 
 # func_latency
 SRC_DIR = src
@@ -21,7 +27,11 @@ LIBS = -lpthread
 
 CXX = g++
 # CXXFLAGS = -g -O0 -fsanitize=address -fno-omit-frame-pointer -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
+ifeq ($(DEBUG), 1)
+CXXFLAGS = -g -O0 -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
+else
 CXXFLAGS = -g -O3 -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
+endif
 
 SRC_FILE = $(wildcard $(SRC_DIR)/*.cc)
 OBJS = $(patsubst %.cc,%.o,$(SRC_FILE))
@@ -36,4 +46,14 @@ clean:
 	$(MAKE) clean -C tools/perf
 	rm -f $(PERF) $(FUNC_LATENCY)
 
-.PHONY: kernelversion
+install:
+	@${INSTALL} -d -m 755 ${PREFIX}
+	@${ECHO} 'INSTALL' ${FUNC_LATENCY} 'to' ${PREFIX}
+	@${INSTALL} ${FUNC_LATENCY} ${PREFIX}/
+	@${ECHO} 'INSTALL' ${PERF} 'to' ${PREFIX}
+	@${INSTALL} ${PERF} ${PREFIX}/
+	@${ECHO} 'INSTALL scripts to' ${PREFIX}
+	@${INSTALL} -d -m 755 ${PREFIX}/scripts
+	@${INSTALL} scripts/* ${PREFIX}/scripts/
+
+.PHONY: kernelversion $(PERF) install

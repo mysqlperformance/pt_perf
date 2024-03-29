@@ -1,45 +1,40 @@
-# PT_PERF ([中文](./README_CN.md))
+# PT_PERF
 
-PT_PERF is a tool for tracing and analysing the performance of runing program, or saves the trace data for historical analysis.
+该工具基于 Intel Processor Trace（Intel-PT）的程序 trace 流，在程序运行时，对指定调用函数进行分析, 或者保存 trace 流，进行历史分析。
 
-It is base on Intel Processor trace (Intel-pt), which traces the data of program control flow and timings, to reconstruct the exact exectution flows with less impact on program execution. PT_PERF makes use of the pt data to show the critical information such as function latency, call chain, etc.
+支持：
 
-The collection and decoding of trace data rely on the Linux perf tool. One can use "perf record" and "perf script" to trace and decode pt data，and they are integrated into PT_PERF. To speed up the decoding, we have modified the perf tool to support 'perf script' in parallel.
+=> 函数分析
 
-**PT_PERF Supported:**
+* 指定函数的时延分布直方图，平均时延。
+* 按上层函数划分指定函数的时延分布。
+* 给出指定函数的子函数调用时延。
+* 支持函数时延按 On-CPU 和 Off-CPU (Schedule) 统计 (需要 root 权限)。
 
-=>  Function analysis
+=> timeline 时间线分析
 
-- Show the histogram of the target function latency.
-- Show the sub-function latency. 
-- Show the function latency grouped by caller.
-- Show the On-cpu and Off-cpu (schedule) time respectively. 
+* 按线程给出函数时延随着 trace 时间的 timeline 变换图。
+* 查看函数在某一时间段的 trace 数据，进行分析（函数或者火焰图分析）。
+* 查看某个时间点的函数栈 pstack。
 
-=> Timeline analysis (base on [Table-and-Graph-Libs](https://github.com/tdulcet/Table-and-Graph-Libs))
+=> Flamegraph 火焰图分析
 
-- Show the function latency curve for each thread.
-- Analyze the trace data in a specific time range.
-- Show the call stack at a specific time point.
-
-=>  Flamegraph (base on [FlamegGraph](https://github.com/brendangregg/FlameGraph))
-
-- Latency based，using [pt_flame](https://github.com/mysqlperformance/pt-flame) to generate call chains.
+* 基于函数时延的火焰图：使用 [pt_flame](https://code.alibaba-inc.com/sunjingyuan.sjy/pt_flame) 对解码数据分析。
 
 
-- Cpu-time based。
+* cpu 火焰图：和传统基于 cpu 采样一致。
 
-=>  Historical analysis
+=> 历史分析
 
-- Trace the full amount of data first, and then do the analysis on-the-fly.
+* 先 trace 某段时间全量数据，再分析 (可以在不同机器，需要拷贝二进制到相同目录)。
 
 ## Usage
-
 ```shell
 Intel processor tool - func_latency
 usage ./func_latency [-b bin/mysqld] [-f func] [-p pid] [-d trace_time] [-P perf_tool] [-s] [-i]
 Linux version 4.2+ is required for Intel PT
 Linux version 5.10+ is required for IP filtering when tracing
-        -b / --binary          --- binary file path, empty for kernel function
+        -b / --binary          --- binary file path, empty for kernel func
         -f / --func            --- target's func name
         -d / --duration        --- trace time (seconds)
         -p / --pid             --- existing process ID
@@ -67,10 +62,20 @@ Flamegraph mode:
              --pt_flame        --- the installed path of pt_flame, latency-based flamegraph required
 ```
 
-### Environment
+### 快速安装
 
-- Increases the 'perf_event_mlock_kb' to reduce trace data loss.
-- Allow to trace kernel function.
+通过 yum 安装，func_latency 和定制的 perf 二进制会安装在 /usr/share/pt_func_perf 目录下。
+
+```shell
+yum install pt_func_perf -b test
+/usr/share/pt_func_perf/func_latency --help
+```
+
+### 环境配置
+
+* 增大系统 perf_event_mlock_kb 大小，减少 trace 数据丢失。
+* 使用 per-thread 模式，性能衰减更低，减少 switch 事件。
+* trace 内核函数，offcpu 统计需要。
 
 ```shell
 sudo bash -c "su -"
@@ -79,14 +84,15 @@ echo -1 > /proc/sys/kernel/perf_event_paranoid
 echo 0 > /proc/sys/kernel/kptr_restrict
 ```
 
-### Install from source code
+### 源码安装
 
 #### Prepare
 
-- Install dependencies of linux perf tool, for parallel script (using with -s ).
+* 安装并行 script 的 perf 工具依赖库，加快 script 速度（-s 参数开启）。
 
 ```shell
-sudo yum install binutils binutils-devel elfutils-libelf-devel -y 
+# 安装支持 symbol 解析库
+sudo yum install binutils-devel elfutils-libelf-devel -y 
 ```
 
 #### Build
@@ -95,87 +101,89 @@ sudo yum install binutils binutils-devel elfutils-libelf-devel -y
 make
 ```
 
-### Command
+### Usage
 
-#### 1: Function analysis.
+#### 场景一：函数分析，查看程序运行时，函数执行信息。
 
-- Use IP_filting (-i) to only trace the data of target function, for less data lost and fast decoding. Linux 5.10+ required.
+  * 使用 IP_filting（-i）可以只 trace 指定函数，数据基本不丢失，不过需要在 Linux 5.10+ 版本支持。
 
-```shell
+  ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t
-```
+  ```
 
-- Use full trace data, do filter when decoding. 
+  * 不支持 IP_filting 可使用全量 trace 所有函数（适合历史分析），再过滤。缺点：速度慢，采样数据量大，容易丢数据，可能会出现由于缺栈的异常较大时延，perf 内部实现了 script 期间的 ip_filing，可进行加速，大约比全量 快 5 倍。
 
-```shell
+  ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -t
-```
+  ```
 
-- When a function has multiple definitions, use the -I argument to specify which symbol to use.
+  * 当函数有多个定义时，可以使用 -I 参数指定使用第几个 symbol。
 
-```shell
+  ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -I "#2"
-```
+  ```
 
-- Show the oncpu and offcpu time (-o, root privilege required). Now only supported under ip_filting (-i) .
+  * 查看函数执行时 oncpu 和 offcpu 时延比例 (-o, 需要 root 权限)，目前只支持 ip_filting (-i) 情况下。
 
-```shell
+  ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
-```
+  ```
 
-- Show the analysis in the latency range from 'min' nanosecond to 'max' nanosecond (--li/--latency_interval=min,max).
+* 查看函数时延在 min 纳秒到 max 纳秒的函数执行信息 (--li/--latency_interval=min,max)。
 
 ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --li=0,200000
 ```
 
-#### 2. Timeline analysis
+#### 场景二：时间线分析。
 
-- Show the function latency curve for each thread (-l), ''--tu/--timeline_unit' can be used to specify the step for averaging, with one dot per latency by default.
+  * 查看函数时延随着时间线分布图 (-l)，可以通过 --tu/--timeline_unit 指定求平均打点的 step，默认每个时延打一个点。
 
-```shell
+  ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -l --tu=1
-```
+  ```
 
-- Show the analysis in the time range with 'start' timestamp and from 'min' nanosecond to 'max' nanosecond (--ti/--time_interval=start,min,max).
+* 查看时间从采样时间 start 开始, min 纳秒到 max 纳秒的时延（ --ti/--time_interval=start,min,max）。
 
 ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -l --tu=1 --ti=5133313694755869,100000,200000
 ```
 
-#### 3. Flamegraph
+#### 场景三：火焰图分析。
 
-- Latency based: use 'pt_flame' to analyze the decode data，the figure is output to 'frame.svg'。
+* 基于函数时延的火焰图：使用 [pt_flame](https://code.alibaba-inc.com/sunjingyuan.sjy/pt_flame) 对解码数据分析，火焰图输出在 flame.svg 中。
 
 ```shell
 ./func_latency --flamegraph="latency" -d 1 -p 60416 -t -s
 ```
 
-- cpu based：sample the instruction on cpu。
+* cpu 火焰图：和传统基于 cpu 采样一致。
 
 ```shell
 ./func_latency --flamegraph="cpu" -d 1 -p 60416 -t -s
 ```
 
-#### 4. Historical analysis
+#### 场景四：历史数据分析。
 
-- do trace data (--history=1), the trace data is saved to 'perf.data'. perf.data and program binaries with debugging information can be copied to other machines for analysis.
+  * trace 数据 (--history=1)，相当于 perf record 保存数据在 perf.data 中。可以将 perf.data 和带有调试信息的程序二进制拷贝到其他机器进行分析。
 
-```shell
+  ```shell
 ./func_latency -d 10 -p 60416 -t --history=1
-```
+  ```
 
-- Use perf.data，and analyze (--history=2), which can use all the previous methods. 
+  * 使用 perf.data，并分析 trace 数据 (--history=2)，可以用前面所有场景分析，通过 -T 查看指定某个线程的 trace。
 
-```shell
+  ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -s -t -l --history=2
-```
+  ```
 
 ### Example
 
-Test MySQL 8.0 under sysbench oltp_read_only (24 cores, 128 threads) workload.
+#### 场景一：函数分析，查看程序运行时，函数执行信息。
 
-```shell
+在 sysbench oltp_read_only（24 cores, 128 threads）负载下测试。  
+
+```Shell
 [ 10s ] thds: 128 tps: 14361.84 qps: 229809.51 
 [ 11s ] thds: 128 tps: 14527.77 qps: 232428.35 
 [ 12s ] thds: 128 tps: 14351.81 qps: 229664.99 
@@ -194,7 +202,7 @@ Test MySQL 8.0 under sysbench oltp_read_only (24 cores, 128 threads) workload.
 [ 25s ] thds: 128 tps: 13953.96 qps: 223300.31 
 ```
 
-- Collect the latency information of 'do_command' for 1s, and also show the on-cpu and off-cpu (schedule) time.
+* 统计 do_command 运行 1s 的时延分布, 查看 schedule 时延。
 
 ```shell
 $ sudo ./func_latency -b "bin/mysqld" -f "do_command" -d 1 -p 60416 -s -i -t -o
@@ -219,7 +227,7 @@ sched count: 199813,   sched latency: 503275 ns, cpu percent: 2264 %
 sched total: 205337, sched each time: 517752 ns
 ```
 
-- Show the sub-function latency of 'do_command'.
+* do_command 的子函数平均时延。
 
 ```shell
 Histogram - Child functions's Latency of [do_command]:
@@ -236,7 +244,7 @@ Protocol_classic::get_output_packet      : 10         422719     0          0.44
 Protocol_classic::get_net                : 7          211244     0          0.15      |                    |
 ```
 
-- Show the latency of 'do_command' called from 'handle_connection'.
+* do_command 来自父函数 handle_connection 的时延分布。
 
 ```shell
 Histogram - Latency of [do_command] called from [handle_connection]:
@@ -259,7 +267,7 @@ trace count: 211244, average latency: 610493 ns
 sched count: 199813,   sched latency: 503275 ns, cpu percent: 2264 %
 ```
 
-- Show the sub-function latency of 'do_command' called from 'handle_connection'.
+* do_command 来自 handle_connection 的子函数调用时延。
 
 ```shell
 Histogram - Child functions's Latency of [do_command] called from [handle_connection]:
@@ -276,15 +284,16 @@ Protocol_classic::get_output_packet      : 10         422488     0          0.44
 Protocol_classic::get_net                : 7          211244     0          0.15      |                    |
 ```
 
-- Trace full execution data, and save to 'perf.data'。
+#### 场景二：先 trace，后解析，并查看指定时间段/范围的函数性能 summary。
+
+* trace 10s 的全量数据。得到 perf.data。
 
 ```shell
 $ ./func_latency -d 10 -p 60416 -t --history=1
 [ perf record: Woken up 0 times to write data ]
 [ perf record: Captured and wrote 2863.829 MB perf.data ]
 ```
-
-- Use the 'perf.data' to show latency curve of 'trx_commit' with thread id of 123173, plot one latency dot every 100 calls. In the figure, we change the commit policy at about 5 s, and the commit latency decreased.
+* 使用历史数据查看 trx_commit 线程 id 为 123173 的时间分布，每 100 次 latency 取平均，也可以通过 -ti=start,min,max 缩小时间范围查看，或者 -li=min,max 缩小查看具体时延范围的 profile。图中在 5 s 的时候做过一次落盘切换，commit 时间发生改变。
 
 ```shell
 $./func_latency -b bin/mysqld -f "trx_commit" -d 10 -t -s -l --tu=100 -T 123173 --history=2
@@ -292,10 +301,12 @@ $./func_latency -b bin/mysqld -f "trx_commit" -d 10 -t -s -l --tu=100 -T 123173 
 
 ![](img/timeline.jpg)
 
-- Show the latency-based flamegraph，including the average latency of each function.
+#### 场景三：火焰图分析。
 
-```
-  ./func_latency --flamegraph="latency" -d 1 -p 60416 -t -s
+* 使用 latency 火焰图查看，每个 function 包括对应的时延平均值。
+
+```shell
+./func_latency --flamegraph="latency" -d 1 -p 60416 -t -s
 ```
 
 ![latency flamegraph](img/flame_latency.jpg)

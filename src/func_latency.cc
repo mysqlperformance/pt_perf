@@ -47,6 +47,7 @@ Param::Param() {
   history = 0;
   flamegraph = "";
   scripts_home = get_current_dir() + "/scripts";
+  pt_flame_home = "/usr/share/pt_flame";
 }
 static string trace_error_str = " instruction trace error";
 
@@ -63,6 +64,7 @@ struct option opts[] = {
   {"func_idx", 1, NULL, 'I'},
   {"timeline", 0, NULL, 'l'},
   {"flamegraph", 1, NULL, 'F'},
+  {"pt_flame", 1, NULL, '4'},
   {"latency_interval", 1, NULL, '0'},
   {"li", 1, NULL, '0'},
   {"time_interval", 1, NULL, '1'},
@@ -111,6 +113,7 @@ static void usage() {
     "\n"
     "Flamegraph mode:\n"
     "\t-F / --flamegraph      --- show the flamegraph, \"latency, cpu\"\n"
+    "\t     --pt_flame        --- the installed path of pt_flame, latency-based flamegraph required\n"
     "\n"
     "Example: ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -P \"~/perf\" -s -t -i\n"
     "         sudo ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -P \"~/perf\" -s -t -i -o\n"
@@ -136,9 +139,11 @@ static bool check_system() {
 }
 
 static bool check_pt_flame() {
-  FILE *file = fopen(PT_FRAME_PATH, "r");
+  FILE *file = fopen(param.pt_flame_home.c_str(), "r");
   if (file == nullptr) {
-    printf("ERROR: Pt_frame is not intalled, try \"yum install t-pt-flame -b test\"\n");
+    printf("ERROR: Pt_frame is not intalled at '%s', try \"yum install t-pt-flame -b test\"\n"
+           "       or clone the source code to install, use '--pt_flame' to set the intalled path\n"
+           "       refer to https://github.com/mysqlperformance/pt-flame.\n", param.pt_flame_home.c_str());
     return -1;
   }
   fclose(file);
@@ -776,9 +781,10 @@ static void perf_script() {
     field = "";
   } else if (param.flamegraph == "latency") {
     itrace = "b";
-    if (access(PT_FRAME_PATH "/lib/pt_filter.so", F_OK) != -1) {
+    std::string pt_filter_so = param.pt_flame_home + "/lib/pt_filter.so";
+    if (access(pt_filter_so.c_str(), F_OK) != -1) {
       sprintf(script_filter + strlen(script_filter),
-        " --dlfilter " PT_FRAME_PATH "/lib/pt_filter.so");
+        " --dlfilter %s", pt_filter_so.c_str());
     } else {
       printf("[ Pt_frame: dlfilter does not exsit, script all ]\n");
     }
@@ -815,7 +821,7 @@ static void print_flame_graph() {
 
   if (param.flamegraph == "latency") {
     /* latency flamegraph */
-    cmd << PT_FRAME_PATH << "/bin/pt_flame -j " << param.worker_num;
+    cmd << param.pt_flame_home << "/bin/pt_flame -j " << param.worker_num;
     if (param.parallel_script) {
       for (size_t i = 0; i < param.worker_num; ++i) {
         snprintf(filename, 128, "script_out__%05d", i);
@@ -832,7 +838,9 @@ static void print_flame_graph() {
     if (param.parallel_script) {
       for (size_t i = 0; i < param.worker_num; ++i) {
         snprintf(filename, 128, "script_out__%05d", i);
-        cmd << " " << filename;
+        if (access(filename, F_OK) != -1) {
+          cmd << " " << filename;
+        }
       }
     } else {
       cmd << " script_out";
@@ -848,7 +856,7 @@ static void print_flame_graph() {
   if (param.verbose) printf("%s\n", cmd.str().c_str());
   system(cmd.str().c_str());
   auto t2 = chrono::steady_clock::now();
-  printf("print flame graph has consumed %.2f seconds\n",
+  printf("[ print flame graph has consumed %.2f seconds ]\n",
           chrono::duration<double>(t2 - t1).count());
   printf("[ Flamegraph has been saved to flame.svg ]\n");
 }
@@ -919,6 +927,9 @@ int main(int argc, char *argv[]) {
       case '3':
         param.timeline_unit = atol(optarg);
         break;
+      case '4':
+        param.pt_flame_home = string(optarg);
+        break;
       case '2':
         param.history = atol(optarg);
         break;
@@ -974,22 +985,22 @@ int main(int argc, char *argv[]) {
   // perf script
   perf_script();
 
-  // flamegraph mode
   if (param.flamegraph != "") {
+    // flamegraph mode
     print_flame_graph();
-    exit(0);
-  }
+  } else {
+    // function analysis mode
+    if (param.target == "") {
+      printf("ERROR: target function name is required if not flamegraph mode\n");
+    }
+    /* start parsers to decode for actions of each profiled thread */
+    /* parse funcs */
+    Thread_map threads;
+    parse_funcs(threads);
 
-  if (param.target == "") {
-    printf("ERROR: target function name is required if not flamegraph mode\n");
+    /* print summary */
+    print_stat(threads);
   }
-  /* start parsers to decode for actions of each profiled thread */
-  /* parse funcs */
-  Thread_map threads;
-  parse_funcs(threads);
-  
-  /* print summary */
-  print_stat(threads);
 
   /* clear resource */
   if (!param.verbose && !param.history) clear_record_files();

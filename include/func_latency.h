@@ -8,7 +8,6 @@
 
 #define PT_HOME_PATH "/sys/devices/intel_pt"
 #define PT_IP_FILTER_PATH "/sys/devices/intel_pt/caps/ip_filtering"
-#define PT_FRAME_PATH "/usr/share/pt_flame"
 #define NSECS_PER_SECS 1000000000UL
 
 struct Param {
@@ -35,6 +34,7 @@ struct Param {
   std::string offcpu_filter;
   std::string flamegraph;
   std::string scripts_home;
+  std::string pt_flame_home;
   Param();
 };
 extern Param param;
