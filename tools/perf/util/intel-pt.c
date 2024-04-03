@@ -1878,6 +1878,12 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 	sample.id = ptq->pt->branches_id;
 	sample.stream_id = ptq->pt->branches_id;
 
+	// thread filter
+	if (thread_filter != -1 && (u32)thread_filter != sample.tid) {
+		return 0;
+	}
+
+	// function filter
 	if (strlen(func_filter) > 0) {
 		struct addr_location from_al, to_al;
 		bool has_target;

@@ -44,6 +44,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -d / --duration        --- trace time (seconds)
         -p / --pid             --- existing process ID
         -T / --tid             --- existing thread ID
+        -C / --cpu             --- cpu list to trace, example like 0-47
         -w / --worker_num      --- parallel worker num, 10 by default
         -s / --parallel_script --- if use parallel script
         -t / --per_thread      --- use per_thread mode to trace data, better in multi-cores

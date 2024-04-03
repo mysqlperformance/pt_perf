@@ -30,6 +30,7 @@ Param::Param() {
   trace_time = 0.01;
   pid = -1;
   tid = -1;
+  cpu = "";
   verbose = false;
   parallel_script = false;
   per_thread_mode = false;
@@ -59,6 +60,7 @@ struct option opts[] = {
   {"duration", 1, NULL, 'd'},
   {"pid", 1, NULL, 'p'},
   {"tid", 1, NULL, 'T'},
+  {"cpu", 1, NULL, 'C'},
   {"perf", 1, NULL, 'P'},
   {"worker_num", 1, NULL, 'w'},
   {"func_idx", 1, NULL, 'I'},
@@ -80,7 +82,7 @@ struct option opts[] = {
   {"help", 0, NULL, 'h'},
   {NULL, 0, NULL, 0}
 };
-const char *opt_str = "hvsitolb:f:d:p:T:P:w:I:F:";
+const char *opt_str = "hvsitolb:f:d:p:T:C:P:w:I:F:";
 
 static void usage() {
   printf(
@@ -93,6 +95,7 @@ static void usage() {
     "\t-d / --duration        --- trace time (seconds)\n"
     "\t-p / --pid             --- existing process ID\n"
     "\t-T / --tid             --- existing thread ID\n"
+    "\t-C / --cpu             --- cpu list to trace, example like 0-47\n"
     "\t-w / --worker_num      --- parallel worker num, 10 by default\n"
     "\t-s / --parallel_script --- if use parallel script\n"
     "\t-t / --per_thread      --- use per_thread mode to trace data, better in multi-cores\n"
@@ -700,6 +703,7 @@ static void print_stat(Thread_map &threads) {
 static void perf_record() {
   char perf_cmd[1024];
   char record_filter[1024];
+  stringstream trace_param;
   snprintf(record_filter, 1024, "");
 
   /* record filter */
@@ -723,20 +727,31 @@ static void perf_record() {
     }
   }
 
-  /* perf record */
-  if (param.per_thread_mode) {
-    snprintf(perf_cmd, 1024,
-      "%s record -e intel_pt/cyc=1/%c -B --per-thread --timestamp %s %s %d -m,32M --no-bpf-event -- sleep %f",
-      param.perf_tool.c_str(), param.offcpu ? ' ' : 'u', record_filter,
-      param.tid != -1 ? "-t" : "-p",
-      param.tid != -1 ? param.tid : param.pid, param.trace_time);
+  /* trace parameter */
+  if (param.cpu != "") {
+    trace_param << " -C " << param.cpu;
+    printf("[ trace cpu %s for %.2f seconds ]\n", param.cpu.c_str(), param.trace_time);
+  } else if (param.tid != -1) {
+    trace_param << " -t " << param.tid;
+    printf("[ trace thread %ld for %.2f seconds ]\n", param.tid, param.trace_time);
+  } else if (param.pid != -1) {
+    trace_param << " -p " << param.pid;
+    printf("[ trace process %ld for %.2f seconds ]\n", param.pid, param.trace_time);
   } else {
-    snprintf(perf_cmd, 1024,
-      "%s record -e intel_pt/cyc=1/%c -B %s %s %d -m,32M --no-bpf-event -- sleep %f",
-      param.perf_tool.c_str(), param.offcpu ? ' ' : 'u', record_filter,
-      param.tid != -1 ? "-t" : "-p",
-      param.tid != -1 ? param.tid : param.pid, param.trace_time);
+    printf("ERROR: use --cpu/--pid/--tid to set trace method\n");
+    exit(0);
   }
+
+  if (param.per_thread_mode) {
+    trace_param << " --per-thread --timestamp ";
+  }
+
+  /* perf record */
+  snprintf(perf_cmd, 1024,
+    "%s record -e intel_pt/cyc=1/%c -B %s %s -m,32M --no-bpf-event -- sleep %f",
+    param.perf_tool.c_str(), param.offcpu ? ' ' : 'u',
+    record_filter, trace_param.str().c_str(), param.trace_time);
+
   if (param.verbose) printf("%s\n", perf_cmd);
   /* execute */
   auto t1 = chrono::steady_clock::now();
@@ -887,6 +902,9 @@ int main(int argc, char *argv[]) {
       case 'T':
         param.tid = atol(optarg);
         break;
+      case 'C':
+        param.cpu = string(optarg);
+        break;
       case 'P':
         param.perf_tool = string(optarg);
         break;
@@ -991,7 +1009,7 @@ int main(int argc, char *argv[]) {
   } else {
     // function analysis mode
     if (param.target == "") {
-      printf("ERROR: target function name is required if not flamegraph mode\n");
+      printf("ERROR: target function name is required if is not in flamegraph mode\n");
     }
     /* start parsers to decode for actions of each profiled thread */
     /* parse funcs */

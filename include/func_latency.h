@@ -17,6 +17,7 @@ struct Param {
   float trace_time;
   long pid;
   long tid;
+  std::string cpu;
   bool verbose;
   bool parallel_script;
   bool per_thread_mode;
