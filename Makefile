@@ -28,9 +28,9 @@ LIBS = -lpthread
 CXX = g++
 # CXXFLAGS = -g -O0 -fsanitize=address -fno-omit-frame-pointer -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
 ifeq ($(DEBUG), 1)
-CXXFLAGS = -g -O0 -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
+CXXFLAGS = -g -O0 -std=c++17 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
 else
-CXXFLAGS = -g -O3 -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
+CXXFLAGS = -g -O3 -std=c++17 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
 endif
 
 SRC_FILE = $(wildcard $(SRC_DIR)/*.cc)

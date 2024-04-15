@@ -8,14 +8,16 @@
 class HistogramBucket;
 class Bucket {
 public:
-  Bucket() : val_name("") {}
-  Bucket(const std::string &name) : val_name(name) {}
+  Bucket() : val_name(""), width(10) {}
+  Bucket(const std::string &name) : val_name(name), width(10) {}
   struct Element {
     std::string name;
     uint64_t count;
     uint64_t total;
     double scale;
-    Element() : count(0), total(0), scale(0.0) {}
+    std::string val_str;
+    int width;
+    Element() : count(0), total(0), scale(0.0), val_str(""), width(10) {}
     uint64_t get_avg() {
       if (!count) return 0;
       return (total / count);
@@ -24,7 +26,9 @@ public:
       return get_avg() > el.get_avg();
     }
     void print() {
-      if (scale)
+      if (val_str != "")
+        printf(" %-*s", width, val_str.substr(0, width).c_str());
+      else if (scale)
         printf(" %-10.2f", get_avg() / scale);
       else
         printf(" %-10d", get_avg());
@@ -37,6 +41,13 @@ public:
     slots[key].name = key;
     slots[key].total += val;
     slots[key].count++;
+  }
+  void add_val(const std::string &key, const std::string &val) {
+    slots[key].name = key;
+    slots[key].val_str = val;
+    if (val.size() > width) {
+      width = val.size();
+    }
   }
   void add_bucket(Bucket &b) {
     for (auto it = b.slots.begin(); it != b.slots.end(); ++it) {
@@ -71,19 +82,33 @@ public:
       slots[it->first].count = it->second.count;
     }
   }
+  void set_width(int w) {
+    width = w;
+    for (auto it = slots.begin(); it != slots.end(); ++it) {
+      it->second.width = w;
+    }
+  }
   void set_val_name(const std::string &name) {
     val_name = name;
   }
   void print_val_name() {
-    printf(" %-*s", 10, val_name.substr(0, 10).c_str());
+    printf(" %-*s", width, val_name.substr(0, width).c_str());
   }
   bool empty() { return slots.size() == 0; }
   void clear() { slots.clear(); }
+
+  template<typename Func>
+  void loop_for_element(Func f) {
+    for (auto it = slots.begin(); it != slots.end(); ++it) {
+      f(it->second);
+    }
+  }
 
   friend class HistogramBucket;
 private:
   Slot slots;
   std::string val_name;
+  uint width;
 };
 
 class HistogramBucket {

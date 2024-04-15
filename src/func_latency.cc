@@ -3,25 +3,22 @@
 #include <iostream>
 #include <fstream>
 #include <assert.h>
-#include <chrono>
 #include <thread>
 #include <getopt.h>
 #include <cmath>
-#include <libgen.h>
 #include <sstream>
 
 #include "graphs.h"
 #include "stat_tools.h"
+#include "sys_tools.h"
 #include "func_latency.h"
 
 using namespace std;
 
-static std::string get_current_dir() {
-  char path[1024];
-  int len = readlink("/proc/self/exe", path, sizeof(path) - 1);
-  path[len] = '\0';
-  return std::string(dirname(path));
-}
+static ParallelWorkerPool worker_pool;
+static string trace_error_str = " instruction trace error";
+static SrclineMap srcline_map;
+Param param;
 
 Param::Param() {
   perf_tool = get_current_dir() + "/perf";
@@ -38,6 +35,8 @@ Param::Param() {
   ip_filtering = false;
   func_idx = "#0"; // global symbol
   offcpu = false;
+  srcline = false;
+
   timeline = false;
   timeline_unit = 1;
   sched_funcname = "__schedule";
@@ -46,13 +45,11 @@ Param::Param() {
   time_interval = {0, UINT64_MAX};
   time_start = UINT64_MAX;
   history = 0;
+
   flamegraph = "";
   scripts_home = get_current_dir() + "/scripts";
   pt_flame_home = "/usr/share/pt_flame";
 }
-static string trace_error_str = " instruction trace error";
-
-Param param;
 
 struct option opts[] = {
   {"binary", 1, NULL, 'b'},
@@ -75,6 +72,7 @@ struct option opts[] = {
   {"tu", 1, NULL, '3'},
   {"history", 1, NULL, '2'},
   {"offcpu", 0, NULL, 'o'},
+  {"srcline", 0, NULL, '5'},
   {"per_thread", 0, NULL, 't'},
   {"ip_filter", 0, NULL, 'i'},
   {"parallel_script", 0, NULL, 's'},
@@ -104,6 +102,7 @@ static void usage() {
     "\t-I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default\n"
     "\t-P / --perf            --- perf tool path, 'perf' by default\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
+    "\t     --srcline         --- show the address, source file and line number of functions\n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
     "\n"
@@ -121,36 +120,6 @@ static void usage() {
     "Example: ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -P \"~/perf\" -s -t -i\n"
     "         sudo ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -P \"~/perf\" -s -t -i -o\n"
   );
-}
-
-static bool check_system() {
-  // first check if intel pt is supported
-  FILE *file = fopen(PT_HOME_PATH, "r");
-  if (file == nullptr) {
-    printf("ERROR: intel pt is not support by your cpu architecture\n");
-    return -1;
-  }
-  fclose(file);
-
-  file = fopen(PT_IP_FILTER_PATH, "r");
-  if (file == nullptr) {
-    printf("ERROR: ip_filtering is not support by your cpu architecture\n");
-    return -1;
-  }
-  fclose(file);
-  return 0;
-}
-
-static bool check_pt_flame() {
-  FILE *file = fopen(param.pt_flame_home.c_str(), "r");
-  if (file == nullptr) {
-    printf("ERROR: Pt_frame is not intalled at '%s', try \"yum install t-pt-flame -b test\"\n"
-           "       or clone the source code to install, use '--pt_flame' to set the intalled path\n"
-           "       refer to https://github.com/mysqlperformance/pt-flame.\n", param.pt_flame_home.c_str());
-    return -1;
-  }
-  fclose(file);
-  return 0;
 }
 
 static void clear_record_files() {
@@ -172,28 +141,102 @@ static void dump_options() {
       param.latency_interval.first, param.latency_interval.second);
 }
 
+bool SrclineMap::get(const std::string &function, std::string &srcline) {
+  shared_lock<shared_mutex> rlock(srcline_mutex);
+  auto it = srcline_map.find(function);
+  if (it != srcline_map.end()) {
+    srcline = it->second;
+    return true;
+  }
+  return false;
+}
+
+
+void SrclineMap::process_address() {
+  unique_lock<shared_mutex> wlock(srcline_mutex);
+  vector<string> func_vec;
+  vector<uint64_t> addr_vec;
+  vector<string> filename_vec;
+  vector<uint> line_nr_vec;
+  for (auto it = addr_map.begin(); it != addr_map.end(); ++it) {
+    func_vec.push_back(it->first);
+    addr_vec.push_back(it->second);
+  }
+  addr2line(param.binary, addr_vec, filename_vec, line_nr_vec);
+  for (size_t i = 0; i < func_vec.size(); ++i) {
+    string &name = func_vec[i];
+    srcline_map[name] = filename_vec[i] + ":" + to_string(line_nr_vec[i]);
+  }
+}
+
+uint64_t SrclineMap::get(const std::string &function) {
+  shared_lock<shared_mutex> rlock(srcline_mutex);
+  auto it = addr_map.find(function);
+  if (it != addr_map.end()) {
+    return it->second;
+  }
+  return 0;
+}
+
+void SrclineMap::put(const std::string &function, uint64_t addr) {
+  unique_lock<shared_mutex> wlock(srcline_mutex);
+  auto it = addr_map.find(function);
+  if (it != addr_map.end()) {
+    return;
+  } else {
+    addr_map[function] = addr;
+  }
+}
+
 Symbol Action::get_symbol(const string &str) {
   if (str.find("[unknown]") != string::npos) {
-    return {"[unknown]", 0};
+    return {"[unknown]", 0, 0};
   }
   
-  size_t start = str.find_first_of('+');
-  size_t end = str.find_first_of(' ', start);
-  if (end == string::npos) end = str.size() - 1;
-  uint offset = stol(str.substr(start + 1, end-start+1), nullptr, 16);
-  
-  start = str.find_first_of(' ') + 1;
+  std::string name = "";
+  uint64_t addr;
+  uint offset;
+  size_t start, end;
+
+  // address
+  end = str.find_first_of(' ');
+  addr = stoull(str.substr(0, end), nullptr, 16);
+
+  // name
+  start = end + 1;
   end = str.find_first_of('+', start);
-  return {str.substr(start, end - start), offset};
+  name = str.substr(start, end - start);
+
+  // offset
+  start = str.find_first_of('+');
+  end = str.find_first_of(' ', start);
+  if (end == string::npos) end = str.size() - 1;
+  offset = stol(str.substr(start + 1, end-start+1), nullptr, 16);
+  
+  if (param.srcline) {
+    uint64_t func_addr = addr-offset;
+    if (name != param.target) {
+      stringstream ss;
+      ss << "(" << std::hex << func_addr << std::dec << ")";
+      name += ss.str();
+    }
+    if(static_cast<int64_t>(addr) > 0) {
+      // only for user symbol
+      if(!srcline_map.get(name)) {
+        srcline_map.put(name, func_addr);
+      }
+    }
+  }
+  return {name, addr, offset};
 }
 
 static void report_error_action(const string &type, uint32_t id, uint32_t lnum) {
   if (param.verbose)
     printf("impletement %s error is detected in action of "
-           "parser %d, line %d\n", type.c_str(), id, lnum);
+           "file %d, line %d\n", type.c_str(), id, lnum);
 }
 
-void Thread::perf_func() {
+void ThreadJob::do_analyze() {
   vector<Action> stack;
   Stat::LatencyChild child;
   uint64_t sched_in_target = 0;
@@ -319,23 +362,26 @@ void Thread::perf_func() {
   }
 }
 
-void Thread::add_actions_from_parser(std::vector<Parser> &parsers) {
+void ThreadJob::extract_actions() {
   uint32_t total_actions = 0;
-  uint32_t parser_size = parsers.size();
-  for (auto &parser : parsers) {
-    if (parser.has_parsed(tid)) 
-      total_actions += parser.get_actions_num(tid);
+  vector<ParseJob *> &parse_jobs = *parse_jobs_ptr;
+  uint32_t parse_job_num = parse_jobs.size();
+  for (ParseJob *parse_job : parse_jobs) {
+    if (parse_job->has_parsed(tid))
+      total_actions += parse_job->get_actions_num(tid);
   }
   actions.reserve(total_actions);
 
-  vector<uint32_t> pointers(parser_size, 0);
+  // extract thread actions from mutiple parse job by merge sort
+  vector<uint32_t> pointers(parse_job_num, 0);
   while (true) {
     uint32_t min_idx = -1;
     uint64_t min_ts = UINT64_MAX;
-    for (size_t i = 0; i < parser_size; ++i) {
+    for (size_t i = 0; i < parse_job_num; ++i) {
       uint32_t idx = pointers[i];
-      if (parsers[i].has_parsed(tid) && idx < parsers[i].get_actions_num(tid)){
-        Action &action = parsers[i].get_action(tid, pointers[i]);
+      if (parse_jobs[i]->has_parsed(tid) &&
+           idx < parse_jobs[i]->get_actions_num(tid)){
+        Action &action = parse_jobs[i]->get_action(tid, pointers[i]);
         if(action.ts < min_ts) {
           min_ts = action.ts;
           min_idx = i;
@@ -345,7 +391,7 @@ void Thread::add_actions_from_parser(std::vector<Parser> &parsers) {
     if (min_idx == -1) {
       break;
     }
-    actions.push_back(parsers[min_idx].get_action(tid, pointers[min_idx]));
+    actions.push_back(parse_jobs[min_idx]->get_action(tid, pointers[min_idx]));
     pointers[min_idx]++;
   }
   assert(actions.size() == total_actions);
@@ -354,7 +400,8 @@ void Thread::add_actions_from_parser(std::vector<Parser> &parsers) {
 static std::vector<std::string> action_type_strs = {
   "tr strt", "tr end  call", "tr end  return", "tr end  hw int", "tr end", "call", "return", "syscall"
 };
-void Parser::decode_to_actions() {
+
+void ParseJob::decode_to_actions() {
   fstream ifs(filename, std::ios::in | std::ios::out);
   if (ifs.is_open()) {
     string line;
@@ -364,6 +411,7 @@ void Parser::decode_to_actions() {
       action.id = id;
       action.lnum = ++lnum;
       action.is_error = false;
+      action.from_target = action.to_target = false;
       if (action.lnum < from || action.lnum >= to) {
         continue;
       }
@@ -383,9 +431,7 @@ void Parser::decode_to_actions() {
         long nsec = stol(line.substr(start, end - start));
         action.ts = sec * NSECS_PER_SECS + nsec;
 
-        Thread &thread = threads[action.tid];
-        thread.set_tid(action.tid);
-        thread.add_action(action);
+        add_action(action);
         if (param.verbose)
           printf("Thread %d lost data at timestamp %lld\n", action.tid, action.ts);
         continue;
@@ -469,93 +515,18 @@ void Parser::decode_to_actions() {
       if (start_time == UINT64_MAX)
         start_time = action.ts;
 
-      /* add to thread set */
-      Thread &thread = threads[tid];
-      thread.set_tid(tid);
-      thread.add_action(action);
-      if (action.from_target || action.to_target)
-        thread.inc_target();
+      /* add to action set */
+      add_action(action);
     }
   } 
 }
 
-static void parse_funcs(Thread_map &threads) {
-  auto t1 = chrono::steady_clock::now();
-  /* 1. parse actions from file */
-  vector<Parser> parsers;
-  if (param.parallel_script) {
-    for (size_t i = 0; i < param.worker_num; ++i) {
-      char filename[1024];
-      sprintf(filename, "script_out__%05d", i);
-      parsers.push_back(Parser(string(filename), 0, UINT32_MAX, i));
-    }
-  } else {
-    size_t total = 0;
-    ifstream ifs("script_out");
-    if (ifs.is_open()) {
-      string line;
-      while (getline(ifs, line)) ++total;
-    }
-    
-    if (total > 100 * param.worker_num) {
-      size_t step = total / param.worker_num + 1;
-      for (size_t i=0; i < param.worker_num; ++i) {
-        size_t from = i * step;
-        size_t to = std::min((i + 1) * step, total);
-        parsers.push_back(Parser("script_out", from, to, i));
-      } 
-    } else {
-      parsers.push_back(Parser("script_out", 0, UINT32_MAX, 0));
-    } 
-  }
-  for (auto &parser : parsers) {
-    parser.parse();
-  }
-  for (auto &parser : parsers) {
-    parser.join();
-  }
-
-  /* 2. parse func for each thread */
-  /* get all profiled threads with target function */
-  size_t total_actions = 0;
-  for (auto &parser : parsers) {
-    if (parser.get_start_time() < param.time_start)
-       param.time_start = parser.get_start_time();
-    for (auto &it : parser.threads) {
-       long tid = it.first;
-       if (threads.count(tid) == 0
-            && it.second.target()) {
-          threads[tid].set_tid(tid);
-       }
-       total_actions += it.second.actions.size();
-    }
-  }
-  printf("%d actions have been parsed\n", total_actions);
-
-  for (auto &it : threads) {
-    Thread &thread = it.second;
-    thread.parse(parsers);
-  }
-  
-  for (auto &it : threads) {
-    Thread &thread = it.second;
-    thread.join();
-  }
-  auto t2 = chrono::steady_clock::now();
-  printf("parse functions has consumed %.2f seconds\n",
-          chrono::duration<double>(t2 - t1).count());
-}
-
 static void print_cross_line(char c) {
-  uint32_t max_width = 80;
-  uint32_t width = 80;
-  uint32_t num = param.offcpu ? 2 : 1;
-  if ((width = HistogramDist::get_print_width(num)) > max_width) {
-    max_width = width;
-  }
-  if ((width = HistogramBucket::get_print_width(num)) > max_width) {
-    max_width = width;
-  }
+  uint32_t max_width = 80, num = 1;
+  if (param.offcpu) num += 1;
+  if (param.srcline) num += 1;
+  max_width = std::max(HistogramDist::get_print_width(num), max_width);
+  max_width = std::max(HistogramBucket::get_print_width(num), max_width);
   printf("\n\033[33m");
   for (int i = 0; i < max_width; ++i) printf("%c", c);
   printf("\033[0m\n");
@@ -578,8 +549,22 @@ void Stat::Latency::print_summary() {
 
 void Stat::LatencyChild::print_summary() {
   HistogramBucket hist;
+
   Bucket oncpu("cpu_pct(%)");
+  Bucket srcline("src_line");
   hist.init_key(target);
+  if (param.srcline) {
+    // add srcline to all buckets
+    srcline.add_bucket(target);
+    int width = 10;
+    srcline.loop_for_element([&](Bucket::Element &el){
+      srcline_map.get(el.name, el.val_str);
+      if (el.val_str.size() > width)
+        width = el.val_str.size();
+    });
+    srcline.set_width(width + 1);
+    hist.add_extra_bucket(&srcline);
+  }
   if (param.offcpu) {
     sched.set_val_name("sched_time");
     sched.set_count(target);
@@ -591,6 +576,7 @@ void Stat::LatencyChild::print_summary() {
     oncpu.set_scale(param.trace_time * 10000000UL);
     hist.add_extra_bucket(&oncpu);
   }
+
   hist.print();
 }
 
@@ -607,8 +593,7 @@ static void print_latency(Stat::Latency &latency) {
   uint32_t width2 =
     floor(log10(target_avg + 1)) + 1;
   printf("trace count: %*lu, average latency: %*lu ns\n",
-          width1, target_cnt,
-          width2, target_avg);
+          width1, target_cnt, width2, target_avg);
   if (param.offcpu) {
     uint64_t sched_avg =
       target_cnt > 0 ? sched_total / target_cnt : 0;
@@ -621,11 +606,17 @@ static void print_latency(Stat::Latency &latency) {
 
 void Stat::print_summary() {
   char title[1024];
+  string target_name = param.target;
+  if (param.srcline) {
+    string srcline;
+    srcline_map.get(target_name, srcline);
+    target_name += ("(" + srcline + ")");
+  }
   /* print target function's latency */
   print_cross_line('=');
   snprintf(title, 1024,
            "Histogram - Latency of [%s]:",
-           param.target.c_str());
+           target_name.c_str());
   print_title(title);
   print_latency(latency);
 
@@ -638,18 +629,25 @@ void Stat::print_summary() {
   print_cross_line('-');
   snprintf(title, 1024,
            "Histogram - Child functions's Latency of [%s]:",
-           param.target.c_str());
+           target_name.c_str());
   print_title(title);
   children.print_summary();
 
   for (auto &it : callers) {
+    string caller_name = it.first;
     auto &caller = it.second;
+    if (param.srcline) {
+      string srcline;
+      srcline_map.get(caller_name, srcline);
+      caller_name += ("(" + srcline + ")");
+    }
     /* target function's latency from current caller */
     print_cross_line('=');
     if (it.first != "unknown") {
       snprintf(title, 1024,
-              "Histogram - Latency of [%s] called from [%s]:",
-               param.target.c_str(), it.first.c_str());
+             "Histogram - Child functions's Latency of [%s]\n"
+             "                             called from [%s]:",
+             target_name.c_str(), caller_name.c_str());
       print_title(title);
       print_latency(caller.latency);
       print_cross_line('-');
@@ -657,52 +655,150 @@ void Stat::print_summary() {
 
     /* print child function's latency from caller */
     snprintf(title, 1024,
-             "Histogram - Child functions's Latency of [%s] called from [%s]:",
-             param.target.c_str(), it.first.c_str());
+             "Histogram - Child functions's Latency of [%s]\n"
+             "                             called from [%s]:",
+             target_name.c_str(), caller_name.c_str());
     print_title(title);
     caller.children.print_summary();
   }
   print_cross_line('=');
 }
 
-static void print_stat(Thread_map &threads) {
-  auto t1 = chrono::steady_clock::now();
+void Stat::print_timeline() {
+  graphs::options gopt;
+  gopt.type = graphs::type_braille;
+  gopt.mark = graphs::mark_dot;
+  gopt.style = graphs::style_light;
+  gopt.check = false;
+  gopt.color = graphs::color_default;
+  gopt.xlabel = "x(us)";
+  gopt.ylabel = "y(us)";
+  //gopt.yexponent = true;
+  printf("start_timestamp: %lld\n", param.time_start);
+  if (timeline.size() > 0)
+    graphs::plot(100, 160, 0, 0, 0, 0, timeline, gopt);
+}
+
+static void print_stat(unordered_map<long, ThreadJob *> &thread_jobs) {
+  auto t1 = ut_time_now();
   if (param.timeline) {
-    char title[1024];
-    graphs::options gopt;
-    gopt.type = graphs::type_braille;
-    gopt.mark = graphs::mark_dot;
-    gopt.style = graphs::style_light;
-    gopt.check = false;
-    gopt.color = graphs::color_default;
-    gopt.xlabel = "x(us)";
-    gopt.ylabel = "y(us)";
-    //gopt.yexponent = true;
-    for (auto it = threads.begin(); it != threads.end(); ++it) {
-      Thread &thread = it->second;
-      snprintf(title, 1024, "\nThread %ld: ", thread.get_tid());
+    for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it) {
+      ThreadJob *thread_job = it->second;
+      Stat &stat = thread_job->get_stat();
+      char title[1024];
+      snprintf(title, 1024, "\nThread %ld: ", thread_job->get_tid());
       print_title(title);
-      printf("start_timestamp: %lld\n", param.time_start);
-      if (thread.get_stat().timeline.size() > 0)
-        graphs::plot(100, 160, 0, 0, 0, 0, thread.get_stat().timeline, gopt);
+      stat.print_timeline();
     }
   } else {
     Stat global_stat;
     /* merge all threads' latency */
-    for (auto it = threads.begin(); it != threads.end(); ++it) {
-      Thread &thread = it->second;
-      global_stat.merge(thread.get_stat());
+    for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it) {
+      ThreadJob *thread = it->second;
+      global_stat.merge(thread->get_stat());
     }
     global_stat.print_summary();
   }
-  auto t2 = chrono::steady_clock::now();
+  auto t2 = ut_time_now();
   printf("[ print stat has consumed %.2f seconds ]\n",
-          chrono::duration<double>(t2 - t1).count());
+          ut_time_diff(t2, t1));
+}
+
+/*
+ * Main function for analyzing performance of function
+ * */
+static void analyze_funcs() {
+  auto t1 = ut_time_now();
+  size_t i;
+
+  /* 1. dispatch parse_jobs */
+  vector<ParseJob *> parse_jobs;
+  if (param.parallel_script) {
+    for (i = 0; i < param.worker_num; ++i) {
+      char filename[1024];
+      sprintf(filename, SCRIPT_FILE_PREFIX "__%05d", i);
+      parse_jobs.push_back(new ParseJob(string(filename), 0, UINT32_MAX, i));
+    }
+  } else {
+    size_t total = get_file_linecount(SCRIPT_FILE_PREFIX);
+    if (total > 100 * param.worker_num) {
+      size_t step = total / param.worker_num + 1;
+      for (i = 0; i < param.worker_num; ++i) {
+        size_t from = i * step;
+        size_t to = std::min((i + 1) * step, total);
+        parse_jobs.push_back(new ParseJob(SCRIPT_FILE_PREFIX, from, to, i));
+      }
+    } else {
+      parse_jobs.push_back(new ParseJob(SCRIPT_FILE_PREFIX, 0, UINT32_MAX, 0));
+    }
+  }
+
+  // do parse jobs
+  for (i = 0; i < parse_jobs.size(); ++i) {
+    worker_pool.add_job(parse_jobs[i], i);
+  }
+  worker_pool.wait_all_idle();
+
+  if (param.srcline) {
+    srcline_map.process_address();
+  }
+
+  auto t2 = ut_time_now();
+  printf("[ parse actions has consumed %.2f seconds ]\n",
+          ut_time_diff(t2, t1));
+  t1 = ut_time_now();
+
+  /* 2. analyze function for each thread */
+  unordered_map<long, ThreadJob*> thread_jobs;
+  size_t total_actions = 0;
+  for (ParseJob *parse_job : parse_jobs) {
+    // caculate the earliest time of action
+    if (parse_job->get_start_time() < param.time_start)
+       param.time_start = parse_job->get_start_time();
+
+    // create thread jobs
+    parse_job->loop_parsed_actions([&](ParseJob::ActionSet &as) {
+      long tid = as.tid;
+      if (!thread_jobs.count(tid) && as.target > 0) {
+         thread_jobs[tid] = new ThreadJob(tid, &parse_jobs);
+      }
+      total_actions += as.size();
+    });
+  }
+  printf("[ %d actions have been parsed ]\n", total_actions);
+
+  // do thread job
+  i = 0;
+  for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it, ++i) {
+    worker_pool.add_job(it->second, i);
+  }
+  worker_pool.wait_all_idle();
+
+  t2 = ut_time_now();
+  printf("[ analyze functions has consumed %.2f seconds ]\n",
+          ut_time_diff(t2, t1));
+
+  /* print summary */
+  print_stat(thread_jobs);
+
+  // free memory of all allocated job
+  vector<MemoryFreeJob> memfree_jobs(parse_jobs.size() + thread_jobs.size());
+  for (i = 0; i < parse_jobs.size(); ++i) {
+    memfree_jobs[i].set_to_free(parse_jobs[i]);
+    worker_pool.add_job(&memfree_jobs[i], i);
+  }
+  for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it, ++i) {
+    memfree_jobs[i].set_to_free(it->second);
+    worker_pool.add_job(&memfree_jobs[i], i);
+  }
+  assert(i == memfree_jobs.size());
+  worker_pool.wait_all_idle();
 }
 
 static void perf_record() {
   char perf_cmd[1024];
   char record_filter[1024];
+  string binary = param.binary;
   stringstream trace_param;
   snprintf(record_filter, 1024, "");
 
@@ -710,16 +806,16 @@ static void perf_record() {
   if (param.ip_filtering) {
     if (!param.offcpu)
       param.offcpu_filter = "";
-    if (param.binary == "") {
+    if (binary == "") {
       // kernel function
       param.func_idx = "";
     } else {
       // user function
-      param.binary = "@ " + param.binary;
+      binary = "@ " + binary;
     }
     snprintf(record_filter, 1024, "--filter '%sfilter %s %s %s'",
              param.offcpu_filter.c_str(), param.target.c_str(),
-             param.func_idx.c_str(), param.binary.c_str());
+             param.func_idx.c_str(), binary.c_str());
   } else {
     if (param.offcpu) {
       param.offcpu = false;
@@ -754,11 +850,11 @@ static void perf_record() {
 
   if (param.verbose) printf("%s\n", perf_cmd);
   /* execute */
-  auto t1 = chrono::steady_clock::now();
+  auto t1 = ut_time_now();
   system(perf_cmd);
-  auto t2 = chrono::steady_clock::now();
+  auto t2 = ut_time_now();
   printf("[ perf record has consumed %.2f seconds ]\n",
-          chrono::duration<double>(t2 - t1).count());
+          ut_time_diff(t2, t1));
 }
 
 static void perf_script() {
@@ -823,11 +919,11 @@ static void perf_script() {
       param.perf_tool.c_str(), itrace.c_str(), field.c_str());
   }
   if (param.verbose) printf("%s\n", perf_cmd);
-  auto t1 = chrono::steady_clock::now();
+  auto t1 = ut_time_now();
   system(perf_cmd);
-  auto t2 = chrono::steady_clock::now();
+  auto t2 = ut_time_now();
   printf("[ perf script has consumed %.2f seconds ]\n",
-          chrono::duration<double>(t2 - t1).count());
+          ut_time_diff(t2, t1));
 }
 
 static void print_flame_graph() {
@@ -867,12 +963,12 @@ static void print_flame_graph() {
     return;
   }
 
-  auto t1 = chrono::steady_clock::now();
   if (param.verbose) printf("%s\n", cmd.str().c_str());
+  auto t1 = ut_time_now();
   system(cmd.str().c_str());
-  auto t2 = chrono::steady_clock::now();
+  auto t2 = ut_time_now();
   printf("[ print flame graph has consumed %.2f seconds ]\n",
-          chrono::duration<double>(t2 - t1).count());
+          ut_time_diff(t2, t1));
   printf("[ Flamegraph has been saved to flame.svg ]\n");
 }
 
@@ -948,6 +1044,13 @@ int main(int argc, char *argv[]) {
       case '4':
         param.pt_flame_home = string(optarg);
         break;
+      case '5':
+        param.srcline = true;
+        if (system("addr2line --help &> /dev/null")) {
+          printf("Warning: addr2line command not found, run without srcline.\n");
+          param.srcline = false;
+        }
+        break;
       case '2':
         param.history = atol(optarg);
         break;
@@ -987,7 +1090,7 @@ int main(int argc, char *argv[]) {
     exit(0);
   }
 
-  if (param.flamegraph == "latency" && check_pt_flame()) {
+  if (param.flamegraph == "latency" && check_pt_flame(param.pt_flame_home)) {
     exit(0);
   }
 
@@ -1000,6 +1103,11 @@ int main(int argc, char *argv[]) {
            "  (with the same absolute path) to another machine for analysis. ]\n");
     exit(0);
   }
+
+  printf("[ start %d parallel workers ]\n", param.worker_num);
+  // create worker pool
+  worker_pool.start(param.worker_num);
+
   // perf script
   perf_script();
 
@@ -1008,16 +1116,11 @@ int main(int argc, char *argv[]) {
     print_flame_graph();
   } else {
     // function analysis mode
-    if (param.target == "") {
+    if (param.target == "")
       printf("ERROR: target function name is required if is not in flamegraph mode\n");
-    }
-    /* start parsers to decode for actions of each profiled thread */
-    /* parse funcs */
-    Thread_map threads;
-    parse_funcs(threads);
 
-    /* print summary */
-    print_stat(threads);
+    /* analyze funcs */
+    analyze_funcs();
   }
 
   /* clear resource */

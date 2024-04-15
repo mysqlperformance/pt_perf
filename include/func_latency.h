@@ -3,12 +3,13 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <shared_mutex>
 
 #include "stat_tools.h"
+#include "worker.h"
 
-#define PT_HOME_PATH "/sys/devices/intel_pt"
-#define PT_IP_FILTER_PATH "/sys/devices/intel_pt/caps/ip_filtering"
 #define NSECS_PER_SECS 1000000000UL
+#define SCRIPT_FILE_PREFIX "script_out"
 
 struct Param {
   std::string perf_tool;
@@ -25,6 +26,8 @@ struct Param {
   bool ip_filtering;
   std::string func_idx;
   bool offcpu;
+  bool srcline;
+
   bool timeline;
   uint32_t timeline_unit;
   std::pair<uint64_t, uint64_t> latency_interval;
@@ -33,6 +36,7 @@ struct Param {
   int history;
   std::string sched_funcname;
   std::string offcpu_filter;
+
   std::string flamegraph;
   std::string scripts_home;
   std::string pt_flame_home;
@@ -42,6 +46,7 @@ extern Param param;
 
 struct Symbol {
   std::string name;
+  uint64_t addr;
   uint offset;
 };
 
@@ -178,90 +183,65 @@ public:
     sched_count += stat.sched_count;
   }
   void print_summary();
+  void print_timeline();
 };
-
-class Parser;
-/* Profile thread class */
-class Thread {
-public:
-  Thread() : thr(nullptr), target_count(0) {}
-  ~Thread() {
-    if(thr) {
-      delete thr;
-      thr = nullptr;
-    }
-  }
-  void add_action(Action &action) {
-    if (!actions.empty() && actions.back().is_error) {
-      // no need to add the same trace error
-      return;
-    }
-    assert(actions.empty() || action.ts >= actions.back().ts);
-    actions.emplace_back(action); 
-  }
-  long get_tid() { return tid; }
-  void set_tid(long t) { tid = t; }
-  void add_actions_from_parser(std::vector<Parser> &parsers);
-  void perf_func();
-
-  static void thread_func(Thread *t, std::vector<Parser> *parsers_ptr) {
-    t->add_actions_from_parser(*parsers_ptr);
-    t->perf_func();
-  }
-  void parse(std::vector<Parser> &parsers) {
-    thr = new std::thread(thread_func, this, &parsers);
-  }
-  void join() {
-    if(thr) thr->join();
-  }
-
-  Stat &get_stat() { return stat; }
-  void inc_target() { ++target_count; }
-  uint32_t target() { return target_count; }
-
-  std::vector<Action> actions;
-  
-private:
-  Stat stat;
-  long tid;
-  std::thread *thr;
-  uint32_t target_count; // action count of target function
-};
-typedef std::unordered_map<long, Thread> Thread_map;
 
 /* parse action from file */
-class Parser {
+class ParseJob : public ParallelJob {
 public:
-  Parser(const std::string &name, uint32_t f, uint32_t t, uint32_t i) 
-    : filename(name), from(f), to(t),
-      start_time(UINT64_MAX), thr(nullptr), id(i) {}
-  ~Parser() {
-    if(thr) {
-      delete thr;
-      thr = nullptr;
+  struct ActionSet {
+    long tid;
+    uint32_t target;
+    std::vector<Action> actions;
+    void add_action(Action &action) {
+      if (action.is_error && !actions.empty() && actions.back().is_error) {
+        // no need to add the same trace error
+        return;
+      }
+      assert(actions.empty() || action.ts >= actions.back().ts);
+      actions.emplace_back(action);
     }
+    Action &operator[] (uint32_t i) { return actions[i]; }
+    size_t size() { return actions.size(); }
+    ActionSet() : target(0) {}
+  };
+
+  ParseJob(const std::string &name, uint32_t f, uint32_t t, uint32_t i) 
+    : filename(name), from(f), to(t),
+      start_time(UINT64_MAX), id(i) {}
+
+  void exec() override {
+    decode_to_actions();
   }
-  static void thread_func(Parser *p) {
-    p->decode_to_actions();
+
+  void add_action(Action &a) {
+    ActionSet &as = parsed_actions[a.tid];
+    as.tid = a.tid;
+    as.add_action(a);
+    if (a.from_target || a.to_target)
+      ++as.target;
   }
-  void parse() {
-    thr = new std::thread(thread_func, this);
-  }
-  void join() {
-    if(thr) thr->join();
-  }
+
   void decode_to_actions();
   size_t get_actions_num(long tid) {
-    return threads[tid].actions.size();
+    return parsed_actions[tid].size();
   }
   Action &get_action(long tid, uint32_t idx) {
-    return threads[tid].actions[idx];
+    return parsed_actions[tid][idx];
   }
   bool has_parsed(long tid) {
-    return threads.count(tid) > 0;
+    return parsed_actions.count(tid) > 0;
   }
   uint64_t get_start_time() { return start_time; }
-  Thread_map threads;
+
+  template <typename Func>
+  void loop_parsed_actions(Func f) {
+    for (auto it = parsed_actions.begin();
+            it != parsed_actions.end(); ++it) {
+      f(it->second);
+    }
+  }
+  friend class ThreadJob;
 
 private:
   std::string filename;
@@ -269,8 +249,47 @@ private:
   uint32_t to;
   uint32_t total;
   uint64_t start_time;
-
-  std::thread *thr;
   uint32_t id;
+
+  // store decoded acitions grouped by thread
+  std::unordered_map<long, ActionSet> parsed_actions;
 };
+
+/* class of traced thread */
+class ThreadJob : public ParallelJob {
+public:
+  ThreadJob(long t, std::vector<ParseJob *> * ptr)
+    : tid(t), parse_jobs_ptr(ptr) {}
+
+  void exec() override {
+    extract_actions();
+    do_analyze();
+  }
+
+  long get_tid() { return tid; }
+  void set_tid(long t) { tid = t; }
+  void extract_actions();
+  void do_analyze();
+
+  Stat &get_stat() { return stat; }
+
+private:
+  std::vector<ParseJob *> *parse_jobs_ptr;
+  std::vector<Action> actions;
+  Stat stat;
+  long tid;
+};
+
+class SrclineMap {
+public:
+  bool get(const std::string &function, std::string &srcline);
+  uint64_t get(const std::string &function);
+  void put(const std::string &function, uint64_t addr);
+  void process_address();
+private:
+  std::unordered_map<std::string, uint64_t> addr_map;
+  std::unordered_map<std::string, std::string> srcline_map;
+  std::shared_mutex srcline_mutex;
+};
+
 #endif

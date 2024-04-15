@@ -53,6 +53,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default
         -P / --perf            --- perf tool path, 'perf' by default
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
+             --srcline         --- show the address, source file and line number of functions
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
         -h / --help            --- show this help
 
