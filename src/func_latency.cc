@@ -17,11 +17,17 @@ using namespace std;
 
 static ParallelWorkerPool worker_pool;
 static string trace_error_str = " instruction trace error";
+/* the missing trace time because of the lost data  */
+static atomic<uint64_t> miss_trace_time{0};
+/* the real trace time based on minimum and maximum timestamp of actions */
+static std::pair<uint64_t, uint64_t> real_trace_time = {UINT64_MAX, 0};
+/* use to decode source file and line number */
 static SrclineMap srcline_map;
 Param param;
 
 Param::Param() {
   perf_tool = get_current_dir() + "/perf";
+  perf_dlfilter = get_current_dir() + "/perf_dlfilter.so";
   binary = "";
   target = "";
   trace_time = 0.01;
@@ -117,8 +123,8 @@ static void usage() {
     "\t-F / --flamegraph      --- show the flamegraph, \"latency, cpu\"\n"
     "\t     --pt_flame        --- the installed path of pt_flame, latency-based flamegraph required\n"
     "\n"
-    "Example: ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -P \"~/perf\" -s -t -i\n"
-    "         sudo ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -P \"~/perf\" -s -t -i -o\n"
+    "Example: ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -s -t -i\n"
+    "         sudo ./func_latency -b \"bin/mysqld\" -f \"do_command\" -d 1 -p 60467 -s -t -i -o\n"
   );
 }
 
@@ -243,18 +249,25 @@ void ThreadJob::do_analyze() {
   uint64_t sched_in_child = 0;
   Action *sched_begin = nullptr;
   stat.sched_count = 0;
+  Action *target_begin = nullptr;
+  bool prev_target_error = false;
+
   for (size_t i = 0; i < actions.size(); ++i) {
     Action &action = actions[i];
 
     if (action.is_error) {
+      /* encounter trace error, discard current execution chain */
       stack.clear();
       child.clear();
+      sched_in_child = sched_in_target = 0;
+      sched_begin = nullptr;
+      prev_target_error = true;
       continue;
     }
 
     if (action.to.offset == 0 && action.to_target) {
         /* this action is the start point for target function, 
-        * clear stack to avoid there exists incompleted traces */
+         * clear stack to avoid there exists incompleted traces */
        stack.clear();
        stack.push_back(action);
        if (!child.empty()) {
@@ -263,12 +276,19 @@ void ThreadJob::do_analyze() {
           stat.add_child_latency(child, "unknown");
           child.clear();
        }
-       sched_in_target = 0;
+       sched_in_target = sched_in_child = 0;
        if (sched_begin) {
          /* ERROR: the schedule is not finished when the target is called */
-         report_error_action("schedule begin", action.id, action.lnum);
+         report_error_action("schedule begin", sched_begin->id, sched_begin->lnum);
          sched_begin = nullptr;
        }
+       if (prev_target_error) {
+         /* calculate the trace missing time */
+         if (target_begin)
+           miss_trace_time.fetch_add(action.ts - target_begin->ts);
+         prev_target_error = false;
+       }
+       target_begin = &action;
        continue;
     }
 
@@ -285,10 +305,20 @@ void ThreadJob::do_analyze() {
         ++stat.sched_count;
         sched_begin = nullptr;
       } else {
-        /* ERROR: the schedule has not stared */
+        /* ERROR: the schedule has not started */
         report_error_action("schedule end", action.id, action.lnum);
       }
       continue;
+    }
+
+    if ((action.type == Action::JMP || action.type == Action::JCC)) {
+      if (action.from_target) {
+        if (!action.to.offset) action.type = Action::CALL;
+        else action.type = Action::RETURN;
+      } else {
+        assert(action.to_target);
+        action.type = Action::RETURN;
+      }
     }
 
     // process one execution chain
@@ -310,41 +340,32 @@ void ThreadJob::do_analyze() {
           report_error_action("trace", action.id, action.lnum);
         }
         break;
+      case Action::HW_INT:
       case Action::TR_END_HW_INT:
+      case Action::CALL:
       case Action::TR_END_CALL:
         // this is call to sub function
         stack.push_back(action);
         if (sched_begin) {
           /* ERROR: the schedule is not finished when the child function is called */
-          report_error_action("schedule begin in child", action.id, action.lnum);
+          report_error_action("schedule begin in child", sched_begin->id, sched_begin->lnum);
           sched_begin = nullptr;
         }
         sched_in_child = 0;
         break;
-      case Action::TR_END_RETURN:
-        if (stack.size() == 1 && stack[0].type == Action::TR_START) {
-          assert(stack[0].to_target && action.from_target);
-          // the execution chain is done and not lost
-          stat.add(stack[0], action, sched_in_target, child);
-          child.clear();
-        }
-        sched_in_target = 0;
-        stack.clear();
-        break;
       case Action::TR_END:
         stack.push_back(action);
         break;
-      case Action::CALL:
-        // call sub function
-        stack.push_back(action);
-        break;
+      case Action::IRET:
       case Action::RETURN:
+      case Action::TR_END_RETURN:
         if (stack.size() == 1 && action.from_target && stack[0].to_target) {
           // the execution chain is done
           stat.add(stack[0], action, sched_in_target, child);
           child.clear();
           sched_in_target = 0;
-        } else if (stack.size() == 2) {
+          stack.clear();
+        } else if (stack.size() == 2 && action.type != Action::TR_END_RETURN) {
           // return to target function from sub function
           string &child_name = stack.back().to.name;
           child.add_target(child_name, (action.ts - stack.back().ts));
@@ -353,7 +374,7 @@ void ThreadJob::do_analyze() {
         } else {
           // wrong chain, discard it
           stack.clear();
-          sched_in_target = 0;
+          sched_in_target = sched_in_child = 0;
         }
         break;
       default:
@@ -367,38 +388,50 @@ void ThreadJob::extract_actions() {
   vector<ParseJob *> &parse_jobs = *parse_jobs_ptr;
   uint32_t parse_job_num = parse_jobs.size();
   for (ParseJob *parse_job : parse_jobs) {
-    if (parse_job->has_parsed(tid))
-      total_actions += parse_job->get_actions_num(tid);
+    total_actions += parse_job->parsed_actions_num(tid);
+    total_actions += parse_job->error_actions_num(tid);
   }
   actions.reserve(total_actions);
 
-  // extract thread actions from mutiple parse job by merge sort
-  vector<uint32_t> pointers(parse_job_num, 0);
+  // extract thread actions (parsed + error action) from mutiple parse job by merge sort
+  vector<uint32_t> pointers(parse_job_num * 2, 0);
   while (true) {
     uint32_t min_idx = -1;
     uint64_t min_ts = UINT64_MAX;
-    for (size_t i = 0; i < parse_job_num; ++i) {
-      uint32_t idx = pointers[i];
-      if (parse_jobs[i]->has_parsed(tid) &&
-           idx < parse_jobs[i]->get_actions_num(tid)){
-        Action &action = parse_jobs[i]->get_action(tid, pointers[i]);
-        if(action.ts < min_ts) {
-          min_ts = action.ts;
-          min_idx = i;
-        }
+    Action *min_action = nullptr;
+    for (size_t i = 0; i < pointers.size(); ++i) {
+      Action *action = nullptr;
+      ParseJob *parse_job = parse_jobs[i / 2];
+      if (i & 1) {
+        // error action
+        uint32_t idx = pointers[i];
+        if (idx < parse_job->error_actions_num(tid))
+          action = parse_job->get_error_action(tid, idx);
+      } else {
+        // normal parsed action
+        uint32_t idx = pointers[i];
+        if (idx < parse_job->parsed_actions_num(tid))
+          action = parse_job->get_parsed_action(tid, idx);
+      }
+      if (action && action->ts < min_ts) {
+        min_ts = action->ts;
+        min_idx = i;
+        min_action = action;
       }
     }
-    if (min_idx == -1) {
+    if (min_action == nullptr) {
       break;
     }
-    actions.push_back(parse_jobs[min_idx]->get_action(tid, pointers[min_idx]));
+    actions.push_back(*min_action);
     pointers[min_idx]++;
   }
   assert(actions.size() == total_actions);
 }
 
 static std::vector<std::string> action_type_strs = {
-  "tr strt", "tr end  call", "tr end  return", "tr end  hw int", "tr end", "call", "return", "syscall"
+  "tr strt", "tr end  call", "tr end  return", "tr end  hw int",
+  "tr end", "call", "return", "syscall", "jmp", "jcc", "hw int",
+  "iret"
 };
 
 void ParseJob::decode_to_actions() {
@@ -417,7 +450,10 @@ void ParseJob::decode_to_actions() {
       }
       if (!line.compare(0, trace_error_str.size(),
               trace_error_str, 0, trace_error_str.size())) {
-        // action implies the trace error
+        if (line.find("Lost trace data") == string::npos) {
+          continue;
+        }
+        // action implies the trace data lost
         action.is_error = true;
         size_t start = line.find("tid") + 3;
         size_t end = line.find("ip");
@@ -431,9 +467,9 @@ void ParseJob::decode_to_actions() {
         long nsec = stol(line.substr(start, end - start));
         action.ts = sec * NSECS_PER_SECS + nsec;
 
-        add_action(action);
-        if (param.verbose)
-          printf("Thread %d lost data at timestamp %lld\n", action.tid, action.ts);
+        add_error_action(action);
+        //if (param.verbose)
+        //  printf("Thread %d lost data at timestamp %lld\n", action.tid, action.ts);
         continue;
       }
       if (line.find(param.target) == string::npos &&
@@ -496,11 +532,12 @@ void ParseJob::decode_to_actions() {
       action.sched_begin = action.sched_end = false;
       if (param.offcpu) {
         if (action.to.name == param.sched_funcname &&
-            action.to.offset == 0 &&
-            action.type == Action::TR_START) {
+            action.to.offset == 0 && (action.type == Action::CALL
+            || action.type == Action::TR_START)) {
           action.sched_begin = true;
         } else if (action.from.name == param.sched_funcname &&
-                   action.type == Action::TR_END_RETURN) {
+                   (action.type == Action::RETURN ||
+                    action.type == Action::TR_END_RETURN)) {
           action.sched_end = true;
         }
       }
@@ -512,13 +549,15 @@ void ParseJob::decode_to_actions() {
         continue;
       }
 
-      if (start_time == UINT64_MAX)
-        start_time = action.ts;
+      if (action.from_target && action.to_target) {
+        /* inner-function jump, skip */
+        continue;
+      }
 
       /* add to action set */
       add_action(action);
     }
-  } 
+  }
 }
 
 static void print_cross_line(char c) {
@@ -566,6 +605,8 @@ void Stat::LatencyChild::print_summary() {
     hist.add_extra_bucket(&srcline);
   }
   if (param.offcpu) {
+    uint64_t trace_time
+      = param.trace_time * NSECS_PER_SECS - miss_trace_time.load();
     sched.set_val_name("sched_time");
     sched.set_count(target);
     hist.add_extra_bucket(&sched);
@@ -573,7 +614,7 @@ void Stat::LatencyChild::print_summary() {
     oncpu.add_bucket(target);
     oncpu.sub_bucket(sched);
     oncpu.set_count(1);
-    oncpu.set_scale(param.trace_time * 10000000UL);
+    oncpu.set_scale(trace_time / 100);
     hist.add_extra_bucket(&oncpu);
   }
 
@@ -595,10 +636,11 @@ static void print_latency(Stat::Latency &latency) {
   printf("trace count: %*lu, average latency: %*lu ns\n",
           width1, target_cnt, width2, target_avg);
   if (param.offcpu) {
+    uint64_t trace_time = param.trace_time * NSECS_PER_SECS - miss_trace_time.load();
     uint64_t sched_avg =
       target_cnt > 0 ? sched_total / target_cnt : 0;
     int cpu_pct =
-      ((target_avg - sched_avg) * target_cnt) / param.trace_time / 10000000UL;
+         100 * ((target_avg - sched_avg) * target_cnt) / trace_time;
     printf("sched count: %*lu,   sched latency: %*lu ns, cpu percent: %d \%\n",
           width1, sched_cnt, width2, sched_avg, cpu_pct);
   }
@@ -645,8 +687,8 @@ void Stat::print_summary() {
     print_cross_line('=');
     if (it.first != "unknown") {
       snprintf(title, 1024,
-             "Histogram - Child functions's Latency of [%s]\n"
-             "                             called from [%s]:",
+             "Histogram - Latency of [%s]\n"
+             "           called from [%s]:",
              target_name.c_str(), caller_name.c_str());
       print_title(title);
       print_latency(caller.latency);
@@ -750,22 +792,26 @@ static void analyze_funcs() {
 
   /* 2. analyze function for each thread */
   unordered_map<long, ThreadJob*> thread_jobs;
-  size_t total_actions = 0;
+  size_t total_actions = 0, error_actions = 0;
   for (ParseJob *parse_job : parse_jobs) {
-    // caculate the earliest time of action
-    if (parse_job->get_start_time() < param.time_start)
-       param.time_start = parse_job->get_start_time();
-
     // create thread jobs
     parse_job->loop_parsed_actions([&](ParseJob::ActionSet &as) {
       long tid = as.tid;
       if (!thread_jobs.count(tid) && as.target > 0) {
          thread_jobs[tid] = new ThreadJob(tid, &parse_jobs);
       }
+      real_trace_time.first = std::min(real_trace_time.first, as.min_timestamp());
+      real_trace_time.second = std::max(real_trace_time.second, as.max_timestamp());
       total_actions += as.size();
     });
+    parse_job->loop_error_actions([&](ParseJob::ActionSet &as) {
+      real_trace_time.first = std::min(real_trace_time.first, as.min_timestamp());
+      real_trace_time.second = std::max(real_trace_time.second, as.max_timestamp());
+      error_actions += as.size();
+    });
   }
-  printf("[ %d actions have been parsed ]\n", total_actions);
+  total_actions += error_actions;
+  printf("[ parsed %d actions, trace errors: %d ]\n", total_actions, error_actions);
 
   // do thread job
   i = 0;
@@ -777,6 +823,20 @@ static void analyze_funcs() {
   t2 = ut_time_now();
   printf("[ analyze functions has consumed %.2f seconds ]\n",
           ut_time_diff(t2, t1));
+
+  // caculate the real trace time base on all actions timestamp
+  param.time_start = real_trace_time.first;
+  if (real_trace_time.second > real_trace_time.first) {
+    double trace_time =
+          (double)(real_trace_time.second - real_trace_time.first) / NSECS_PER_SECS;
+    printf("[ real trace time: %0.2f seconds ]\n", trace_time);
+    if (trace_time > param.trace_time)
+      param.trace_time = trace_time;
+  }
+
+  if (thread_jobs.size())
+    miss_trace_time.store(miss_trace_time.load() / thread_jobs.size());
+  printf("[ miss trace time: %0.2f seconds ]\n", (double) miss_trace_time.load() / NSECS_PER_SECS);
 
   /* print summary */
   print_stat(thread_jobs);
@@ -816,17 +876,22 @@ static void perf_record() {
     snprintf(record_filter, 1024, "--filter '%sfilter %s %s %s'",
              param.offcpu_filter.c_str(), param.target.c_str(),
              param.func_idx.c_str(), binary.c_str());
-  } else {
-    if (param.offcpu) {
-      param.offcpu = false;
-      printf("Warning: offcpu time is not supported when ip_filtering is off\n");
-    }
   }
 
   /* trace parameter */
   if (param.cpu != "") {
     trace_param << " -C " << param.cpu;
     printf("[ trace cpu %s for %.2f seconds ]\n", param.cpu.c_str(), param.trace_time);
+    if (param.offcpu) {
+      // TODO: there exists never-stop looping
+      // when tracing schedule function for cpu tracing
+      printf("Warning: offcpu is not support for CPU tracing, turn it off\n");
+      param.offcpu = false;
+    }
+    if (param.ip_filtering) {
+      printf("Warning: ip filtering is not support for CPU tracing, turn it off\n");
+      param.ip_filtering = false;
+    }
   } else if (param.tid != -1) {
     trace_param << " -t " << param.tid;
     printf("[ trace thread %ld for %.2f seconds ]\n", param.tid, param.trace_time);
@@ -858,69 +923,63 @@ static void perf_record() {
 }
 
 static void perf_script() {
-  char perf_cmd[1024];
-  char script_filter[1024];
-  string itrace = "cr";
+  stringstream perf_cmd, script_filter;
+  string itrace = "b";
   string field = "-F-event,-period,+tid,+cpu,+time,+addr,-comm,+flags,-dso";
-  snprintf(script_filter, 1024, "");
 
   clear_script_files();
 
   /* script filter */
   if (param.parallel_script) {
-    char script_ip_filter[1024];
     // ip filter
     if (!param.ip_filtering && param.target != "" && param.binary != "")
-      snprintf(script_filter, 1024, "--func_filter=\"%s\" --opt_dso_name=\"%s\"",
-               param.target.c_str(), param.binary.c_str());
+      script_filter << " --func_filter=\"" << param.target << "\""
+                    << " --opt_dso_name=\"" << param.binary << "\"";
     // thread filter
     if (param.tid != -1)
-      sprintf(script_filter + strlen(script_filter),
-              " --thread_filter=%d", param.tid);
+      script_filter << " --thread_filter=" << param.tid;
     // time filter
     if (param.time_interval.first != 0
-        || param.time_interval.second != UINT64_MAX)
-      sprintf(script_filter + strlen(script_filter), " --time=%d.%09d,%d.%09d",
+        || param.time_interval.second != UINT64_MAX) {
+      char time_filter[1024];
+      snprintf(time_filter, 1024, " --time=%d.%09d,%d.%09d",
                param.time_interval.first / NSECS_PER_SECS,
                param.time_interval.first % NSECS_PER_SECS,
                param.time_interval.second / NSECS_PER_SECS,
                param.time_interval.second % NSECS_PER_SECS);
+      script_filter << " --time=" << time_filter;
+    }
   }
-  
+
+  /* dl filter */
+  if (access(param.perf_dlfilter.c_str(), F_OK) != -1) {
+    script_filter << " --dlfilter=" << param.perf_dlfilter;
+  }
+
   if (param.flamegraph == "cpu") {
     itrace = "i10usg127";
     field = "";
   } else if (param.flamegraph == "latency") {
     itrace = "b";
-    std::string pt_filter_so = param.pt_flame_home + "/lib/pt_filter.so";
-    if (access(pt_filter_so.c_str(), F_OK) != -1) {
-      sprintf(script_filter + strlen(script_filter),
-        " --dlfilter %s", pt_filter_so.c_str());
-    } else {
-      printf("[ Pt_frame: dlfilter does not exsit, script all ]\n");
-    }
-  } else if (!param.ip_filtering) {
+  } else {
+    // for trace errors
     itrace += "e";
   }
 
   /* perf script */
+  perf_cmd << param.perf_tool << " script --ns"
+           << " --itrace=" << itrace
+           << " " << script_filter.str()
+           << " " << field;
   if (param.parallel_script) {
-    snprintf(perf_cmd, 1024,
-      "%s script --itrace=%s --ns --parallel=%d %s %s %s",
-      param.perf_tool.c_str(),
-      itrace.c_str(),
-      param.worker_num,
-      script_filter,
-      field.c_str(),
-      param.verbose ? "" : "&> /dev/null");
+    perf_cmd << " --parallel=" << param.worker_num
+             << " " << (param.verbose ? "" : "&> /dev/null");
   } else {
-    snprintf(perf_cmd, 1024,
-      "%s script --itrace=%s --ns %s > script_out",
-      param.perf_tool.c_str(), itrace.c_str(), field.c_str());
+    perf_cmd << " > script_out";
   }
-  if (param.verbose) printf("%s\n", perf_cmd);
+  if (param.verbose) printf("%s\n", perf_cmd.str().c_str());
   auto t1 = ut_time_now();
-  system(perf_cmd);
+  system(perf_cmd.str().c_str());
   auto t2 = ut_time_now();
   printf("[ perf script has consumed %.2f seconds ]\n",
           ut_time_diff(t2, t1));
@@ -935,11 +994,11 @@ static void print_flame_graph() {
     cmd << param.pt_flame_home << "/bin/pt_flame -j " << param.worker_num;
     if (param.parallel_script) {
       for (size_t i = 0; i < param.worker_num; ++i) {
-        snprintf(filename, 128, "script_out__%05d", i);
+        snprintf(filename, 128, SCRIPT_FILE_PREFIX "__%05d", i);
         cmd << " " << filename;
       }
     } else {
-      cmd << " script_out";
+      cmd << " " SCRIPT_FILE_PREFIX;
     }
     cmd << " | " << param.scripts_home << "/flamegraph.pl"
         << " --countname=\"ns\" > flame.svg";
@@ -948,13 +1007,13 @@ static void print_flame_graph() {
     cmd << "cat ";
     if (param.parallel_script) {
       for (size_t i = 0; i < param.worker_num; ++i) {
-        snprintf(filename, 128, "script_out__%05d", i);
+        snprintf(filename, 128, SCRIPT_FILE_PREFIX "__%05d", i);
         if (access(filename, F_OK) != -1) {
           cmd << " " << filename;
         }
       }
     } else {
-      cmd << " script_out";
+      cmd << " " SCRIPT_FILE_PREFIX;
     }
     cmd << " | " << param.scripts_home << "/stackcollapse-perf.pl"
         << " | " << param.scripts_home << "/flamegraph.pl > flame.svg";
@@ -1116,9 +1175,10 @@ int main(int argc, char *argv[]) {
     print_flame_graph();
   } else {
     // function analysis mode
-    if (param.target == "")
+    if (param.target == "") {
       printf("ERROR: target function name is required if is not in flamegraph mode\n");
-
+      exit(0);
+    }
     /* analyze funcs */
     analyze_funcs();
   }

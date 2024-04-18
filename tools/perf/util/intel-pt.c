@@ -485,7 +485,7 @@ static int intel_pt_lookahead(void *data, intel_pt_lookahead_cb_t cb,
 				// per-thread mode
 				e = auxtrace_cache__lookup(thread_batch_events, current_decode_tid);
 			}
-			if (!e) {
+			if (!e || !e->batch_add) {
 				b.len = 0;
 			} else {
 				if (e->buffer_add < e->batch_add) {
@@ -570,7 +570,7 @@ static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 			// per-thread mode
 			e = auxtrace_cache__lookup(thread_batch_events, current_decode_tid);
 		}
-		if (!e) {
+		if (!e || !e->batch_add) {
 			b->len = 0;
 		} else {
 			if (e->buffer_add < e->batch_add) {
@@ -1891,22 +1891,40 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 			from_al.addr = to_al.addr = 0;
 			intel_pt_parse_ip(ptq, sample.ip, &from_al);
 			intel_pt_parse_ip(ptq, sample.addr, &to_al);
-			has_target = false;
-			for (size_t i = 0; i < fil_syms_size; ++i) {
-				if ((fil_syms[i].start <= from_al.addr && fil_syms[i].end >= from_al.addr)
-						|| (fil_syms[i].start <= to_al.addr && fil_syms[i].end >= to_al.addr)) {
-						has_target = true;
-						break;
+			if (to_al.addr && to_al.map && __map__is_kernel(to_al.map)) {
+				from_al.sym = to_al.sym = NULL;
+				intel_pt_parse_sym(ptq, sample.ip, &from_al);
+				intel_pt_parse_sym(ptq, sample.addr, &to_al);
+				/* for schedule function of kernel */
+				if ((!from_al.sym || strcmp(from_al.sym->name, "__schedule"))
+						&& (!to_al.sym || strcmp(to_al.sym->name, "__schedule"))) {
+					return 0;
 				}
+			} else {
+				has_target = false;
+				for (size_t i = 0; i < fil_syms_size; ++i) {
+					if ((fil_syms[i].start <= from_al.addr && fil_syms[i].end >= from_al.addr)
+							|| (fil_syms[i].start <= to_al.addr && fil_syms[i].end >= to_al.addr)) {
+							has_target = true;
+							break;
+					}
+				}
+				if (!has_target) return 0;
 			}
-			if (!has_target) return 0;
 		} else {
 			from_al.sym = to_al.sym = NULL;
 			intel_pt_parse_sym(ptq, sample.ip, &from_al);
 			intel_pt_parse_sym(ptq, sample.addr, &to_al);
-			if ((!from_al.sym || strcmp(from_al.sym->name, func_filter))
-				&& (!to_al.sym || strcmp(to_al.sym->name, func_filter)))
+			if (to_al.map && __map__is_kernel(to_al.map)) {
+				/* for schedule function of kernel */
+				if ((!from_al.sym || strcmp(from_al.sym->name, "__schedule"))
+						&& (!to_al.sym || strcmp(to_al.sym->name, "__schedule"))) {
+					return 0;
+				}
+			} else if ((!from_al.sym || strcmp(from_al.sym->name, func_filter))
+				&& (!to_al.sym || strcmp(to_al.sym->name, func_filter))) {
 				return 0;
+			}
 		}
 	}
 

@@ -13,6 +13,7 @@
 
 struct Param {
   std::string perf_tool;
+  std::string perf_dlfilter;
   std::string binary;
   std::string target;
   float trace_time;
@@ -59,7 +60,11 @@ struct Action {
     TR_END,
     CALL,
     RETURN,
-    SYSCALL
+    SYSCALL,
+    JMP,
+    JCC,
+    HW_INT,
+    IRET
   };
   static Symbol get_symbol(const std::string &str);
 
@@ -194,24 +199,26 @@ public:
     uint32_t target;
     std::vector<Action> actions;
     void add_action(Action &action) {
-      if (action.is_error && !actions.empty() && actions.back().is_error) {
-        // no need to add the same trace error
-        return;
-      }
-      assert(actions.empty() || action.ts >= actions.back().ts);
+      assert(actions.empty() || action.ts >= actions.back().ts || action.is_error);
       actions.emplace_back(action);
     }
     Action &operator[] (uint32_t i) { return actions[i]; }
     size_t size() { return actions.size(); }
+    static inline bool cmp_action(const Action &a1, const Action &a2) {
+      return a1.ts < a2.ts;
+    }
+    void sort() { std::sort(actions.begin(), actions.end(), cmp_action); }
+    uint64_t min_timestamp() { return actions.empty() ? UINT64_MAX : actions[0].ts; }
+    uint64_t max_timestamp() { return actions.empty() ? 0 : actions.back().ts; }
     ActionSet() : target(0) {}
   };
 
   ParseJob(const std::string &name, uint32_t f, uint32_t t, uint32_t i) 
-    : filename(name), from(f), to(t),
-      start_time(UINT64_MAX), id(i) {}
+    : filename(name), from(f), to(t), id(i) {}
 
   void exec() override {
     decode_to_actions();
+    sort_actions();
   }
 
   void add_action(Action &a) {
@@ -222,22 +229,51 @@ public:
       ++as.target;
   }
 
-  void decode_to_actions();
-  size_t get_actions_num(long tid) {
-    return parsed_actions[tid].size();
+  void add_error_action(Action &a) {
+    ActionSet &as = error_actions[a.tid];
+    as.tid = a.tid;
+    as.add_action(a);
   }
-  Action &get_action(long tid, uint32_t idx) {
-    return parsed_actions[tid][idx];
-  }
-  bool has_parsed(long tid) {
-    return parsed_actions.count(tid) > 0;
-  }
-  uint64_t get_start_time() { return start_time; }
 
+  void decode_to_actions();
+  void sort_actions() {
+    // now only error actions may be out-of-order
+    for (auto it = error_actions.begin(); it != error_actions.end(); ++it) {
+      ActionSet &as = it->second;
+      as.sort();
+    }
+  }
+  size_t parsed_actions_num(long tid) {
+    if (parsed_actions.count(tid) > 0)
+      return parsed_actions[tid].size();
+    return 0;
+  }
+  Action *get_parsed_action(long tid, uint32_t idx) {
+    if (parsed_actions.count(tid) > 0)
+      return &parsed_actions[tid][idx];
+    return nullptr;
+  }
+  size_t error_actions_num(long tid) {
+    if (error_actions.count(tid) > 0)
+      return error_actions[tid].size();
+    return 0;
+  }
+  Action *get_error_action(long tid, uint32_t idx) {
+    if (error_actions.count(tid) > 0)
+      return &error_actions[tid][idx];
+    return nullptr;
+  }
   template <typename Func>
   void loop_parsed_actions(Func f) {
     for (auto it = parsed_actions.begin();
             it != parsed_actions.end(); ++it) {
+      f(it->second);
+    }
+  }
+  template <typename Func>
+  void loop_error_actions(Func f) {
+    for (auto it = error_actions.begin();
+            it != error_actions.end(); ++it) {
       f(it->second);
     }
   }
@@ -248,11 +284,12 @@ private:
   uint32_t from;
   uint32_t to;
   uint32_t total;
-  uint64_t start_time;
   uint32_t id;
 
   // store decoded acitions grouped by thread
   std::unordered_map<long, ActionSet> parsed_actions;
+  // store trace error action grouped by thread
+  std::unordered_map<long, ActionSet> error_actions;
 };
 
 /* class of traced thread */

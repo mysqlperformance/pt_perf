@@ -125,11 +125,17 @@ make
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -I "#2"
   ```
 
-  * 查看函数执行时 oncpu 和 offcpu 时延比例 (-o, 需要 root 权限)，目前只支持 ip_filting (-i) 情况下。
+  * 查看函数执行时 oncpu 和 offcpu 时延比例 (-o, 需要 root 权限)。
 
   ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
   ```
+
+  * 显示函数的地址，源文件路径和行号，需要指定 '--srcline'。
+
+```shell
+sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcline
+```
 
 * 查看函数时延在 min 纳秒到 max 纳秒的函数执行信息 (--li/--latency_interval=min,max)。
 

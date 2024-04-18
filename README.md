@@ -119,10 +119,16 @@ make
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -I "#2"
 ```
 
-- Show the oncpu and offcpu time (-o, root privilege required). Now only supported under ip_filting (-i) .
+- Show the oncpu and offcpu time (-o, root privilege required).
 
 ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
+```
+
+- Show the function address, source file and line number with '--srcline'.
+
+```shell
+sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcline
 ```
 
 - Show the analysis in the latency range from 'min' nanosecond to 'max' nanosecond (--li/--latency_interval=min,max).
