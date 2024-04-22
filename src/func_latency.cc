@@ -810,6 +810,7 @@ static void analyze_funcs() {
       error_actions += as.size();
     });
   }
+  param.time_start = real_trace_time.first;
   total_actions += error_actions;
   printf("[ parsed %d actions, trace errors: %d ]\n", total_actions, error_actions);
 
@@ -825,7 +826,6 @@ static void analyze_funcs() {
           ut_time_diff(t2, t1));
 
   // caculate the real trace time base on all actions timestamp
-  param.time_start = real_trace_time.first;
   if (real_trace_time.second > real_trace_time.first) {
     double trace_time =
           (double)(real_trace_time.second - real_trace_time.first) / NSECS_PER_SECS;
