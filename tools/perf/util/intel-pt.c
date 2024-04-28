@@ -1856,6 +1856,62 @@ static int intel_pt_parse_sym(struct intel_pt_queue *ptq, uint64_t ip, struct ad
   return 0;
 }
 
+static bool intel_pt_func_filter_by_sym(
+     struct addr_location *from_al,
+     struct addr_location *to_al,
+     struct intel_pt_queue *ptq,
+     struct perf_sample *sample) {
+	from_al->addr = to_al->addr = 0;
+	from_al->sym = to_al->sym = NULL;
+	intel_pt_parse_sym(ptq, sample->ip, from_al);
+	intel_pt_parse_sym(ptq, sample->addr, to_al);
+	if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
+		/* for schedule function of kernel */
+		if ((!from_al->sym || strcmp(from_al->sym->name, "__schedule"))
+				&& (!to_al->sym || strcmp(to_al->sym->name, "__schedule"))) {
+			return true;
+		}
+	} else if ((!from_al->sym || strcmp(from_al->sym->name, func_filter))
+		&& (!to_al->sym || strcmp(to_al->sym->name, func_filter))) {
+		return true;
+	}
+	return false;
+}
+
+static bool intel_pt_func_filter_by_ip(
+     struct addr_location *from_al,
+     struct addr_location *to_al,
+     struct intel_pt_queue *ptq,
+     struct perf_sample *sample) {
+	bool has_target;
+	from_al->addr = to_al->addr = 0;
+	intel_pt_parse_ip(ptq, sample->ip, from_al);
+	intel_pt_parse_ip(ptq, sample->addr, to_al);
+	if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
+		from_al->sym = to_al->sym = NULL;
+		intel_pt_parse_sym(ptq, sample->ip, from_al);
+		intel_pt_parse_sym(ptq, sample->addr, to_al);
+		/* for schedule function of kernel */
+		if ((!from_al->sym || strcmp(from_al->sym->name, "__schedule"))
+				&& (!to_al->sym || strcmp(to_al->sym->name, "__schedule"))) {
+			return true;
+		}
+	} else {
+		has_target = false;
+		for (size_t i = 0; i < fil_syms_size; ++i) {
+			if ((fil_syms[i].start <= from_al->addr && fil_syms[i].end >= from_al->addr)
+					|| (fil_syms[i].start <= to_al->addr && fil_syms[i].end >= to_al->addr)) {
+					has_target = true;
+					break;
+			}
+		}
+		if (!has_target) {
+			return true;
+		}
+	}
+	return false;
+}
+
 static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 {
 	struct intel_pt *pt = ptq->pt;
@@ -1886,45 +1942,10 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 	// function filter
 	if (strlen(func_filter) > 0) {
 		struct addr_location from_al, to_al;
-		bool has_target;
-		if (fil_syms_size > 0) {
-			from_al.addr = to_al.addr = 0;
-			intel_pt_parse_ip(ptq, sample.ip, &from_al);
-			intel_pt_parse_ip(ptq, sample.addr, &to_al);
-			if (to_al.addr && to_al.map && __map__is_kernel(to_al.map)) {
-				from_al.sym = to_al.sym = NULL;
-				intel_pt_parse_sym(ptq, sample.ip, &from_al);
-				intel_pt_parse_sym(ptq, sample.addr, &to_al);
-				/* for schedule function of kernel */
-				if ((!from_al.sym || strcmp(from_al.sym->name, "__schedule"))
-						&& (!to_al.sym || strcmp(to_al.sym->name, "__schedule"))) {
-					return 0;
-				}
-			} else {
-				has_target = false;
-				for (size_t i = 0; i < fil_syms_size; ++i) {
-					if ((fil_syms[i].start <= from_al.addr && fil_syms[i].end >= from_al.addr)
-							|| (fil_syms[i].start <= to_al.addr && fil_syms[i].end >= to_al.addr)) {
-							has_target = true;
-							break;
-					}
-				}
-				if (!has_target) return 0;
-			}
-		} else {
-			from_al.sym = to_al.sym = NULL;
-			intel_pt_parse_sym(ptq, sample.ip, &from_al);
-			intel_pt_parse_sym(ptq, sample.addr, &to_al);
-			if (to_al.map && __map__is_kernel(to_al.map)) {
-				/* for schedule function of kernel */
-				if ((!from_al.sym || strcmp(from_al.sym->name, "__schedule"))
-						&& (!to_al.sym || strcmp(to_al.sym->name, "__schedule"))) {
-					return 0;
-				}
-			} else if ((!from_al.sym || strcmp(from_al.sym->name, func_filter))
-				&& (!to_al.sym || strcmp(to_al.sym->name, func_filter))) {
-				return 0;
-			}
+		if (fil_syms_size > 0 && intel_pt_func_filter_by_ip(&from_al, &to_al, ptq, &sample)) {
+			return 0;
+		} else if (intel_pt_func_filter_by_sym(&from_al, &to_al, ptq, &sample)){
+			return 0;
 		}
 	}
 
