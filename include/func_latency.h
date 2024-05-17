@@ -28,6 +28,7 @@ struct Param {
   std::string func_idx;
   bool offcpu;
   bool srcline;
+  bool call_line;
 
   bool timeline;
   uint32_t timeline_unit;
@@ -66,7 +67,7 @@ struct Action {
     HW_INT,
     IRET
   };
-  static Symbol get_symbol(const std::string &str);
+  static Symbol get_symbol(const std::string &str, Symbol *caller);
 
   Symbol from;
   Symbol to;

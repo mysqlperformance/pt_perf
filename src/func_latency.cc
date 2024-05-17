@@ -42,6 +42,7 @@ Param::Param() {
   func_idx = "#0"; // global symbol
   offcpu = false;
   srcline = false;
+  call_line = false;
 
   timeline = false;
   timeline_unit = 1;
@@ -79,6 +80,7 @@ struct option opts[] = {
   {"history", 1, NULL, '2'},
   {"offcpu", 0, NULL, 'o'},
   {"srcline", 0, NULL, '5'},
+  {"call_line", 0, NULL, '6'},
   {"per_thread", 0, NULL, 't'},
   {"ip_filter", 0, NULL, 'i'},
   {"parallel_script", 0, NULL, 's'},
@@ -109,6 +111,7 @@ static void usage() {
     "\t-P / --perf            --- perf tool path, 'perf' by default\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
     "\t     --srcline         --- show the address, source file and line number of functions\n"
+    "\t     --call_line       --- similar to 'srcline', but show the call location of child functions\n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
     "\n"
@@ -148,6 +151,7 @@ static void dump_options() {
 }
 
 bool SrclineMap::get(const std::string &function, std::string &srcline) {
+  srcline = "";
   shared_lock<shared_mutex> rlock(srcline_mutex);
   auto it = srcline_map.find(function);
   if (it != srcline_map.end()) {
@@ -194,7 +198,7 @@ void SrclineMap::put(const std::string &function, uint64_t addr) {
   }
 }
 
-Symbol Action::get_symbol(const string &str) {
+Symbol Action::get_symbol(const string &str, Symbol *caller) {
   if (str.find("[unknown]") != string::npos) {
     return {"[unknown]", 0, 0};
   }
@@ -222,6 +226,10 @@ Symbol Action::get_symbol(const string &str) {
   if (param.srcline) {
     uint64_t func_addr = addr-offset;
     if (name != param.target) {
+      if (param.call_line && caller) {
+        // show the source line of the call address
+        func_addr = caller->addr;
+      }
       stringstream ss;
       ss << "(" << std::hex << func_addr << std::dec << ")";
       name += ss.str();
@@ -520,12 +528,12 @@ void ParseJob::decode_to_actions() {
       /* action symbol */
       start = line.find_first_not_of(' ', end);
       end = line.find("=>", start);
-      action.from = Action::get_symbol(line.substr(start, end - start));
+      action.from = Action::get_symbol(line.substr(start, end - start), nullptr);
       action.from_target = (action.from.name == param.target) ? true : false;
       
       start = line.find_first_not_of(' ', end + 2);
       end = line.size();
-      action.to = Action::get_symbol(line.substr(start, end - start));
+      action.to = Action::get_symbol(line.substr(start, end - start), &action.from);
       action.to_target = (action.to.name == param.target) ? true : false;
 
       /* action for offcpu */
@@ -1103,6 +1111,8 @@ int main(int argc, char *argv[]) {
       case '4':
         param.pt_flame_home = string(optarg);
         break;
+      case '6':
+        param.call_line = true;
       case '5':
         param.srcline = true;
         if (system("addr2line --help &> /dev/null")) {

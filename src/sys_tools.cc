@@ -77,7 +77,9 @@ static int filename_split(char *line, std::string &filename, uint &line_nr)
   filename = line_str.substr(start, end - start);
   start = end + 1;
   end = line_str.size() - 1; // in last char of "\n"
-  line_nr = std::stoul(line_str.substr(start, end - start));
+  std::string line_nr_str = line_str.substr(start, end - start);
+  if (line_nr_str != "?")
+    line_nr = std::stoul(line_nr_str);
   return 0;
 }
 
