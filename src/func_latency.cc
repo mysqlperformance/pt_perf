@@ -151,7 +151,7 @@ static void dump_options() {
 }
 
 bool SrclineMap::get(const std::string &function, std::string &srcline) {
-  srcline = "";
+  srcline = " ";
   shared_lock<shared_mutex> rlock(srcline_mutex);
   auto it = srcline_map.find(function);
   if (it != srcline_map.end()) {
@@ -223,7 +223,7 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
   if (end == string::npos) end = str.size() - 1;
   offset = stol(str.substr(start + 1, end-start+1), nullptr, 16);
   
-  if (param.srcline) {
+  if (param.srcline && static_cast<int64_t>(addr) > 0) {
     uint64_t func_addr = addr-offset;
     if (name != param.target) {
       if (param.call_line && caller) {
@@ -234,11 +234,9 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
       ss << "(" << std::hex << func_addr << std::dec << ")";
       name += ss.str();
     }
-    if(static_cast<int64_t>(addr) > 0) {
-      // only for user symbol
-      if(!srcline_map.get(name)) {
-        srcline_map.put(name, func_addr);
-      }
+    // only for user symbol
+    if(!srcline_map.get(name)) {
+      srcline_map.put(name, func_addr);
     }
   }
   return {name, addr, offset};
@@ -598,7 +596,7 @@ void Stat::LatencyChild::print_summary() {
   HistogramBucket hist;
 
   Bucket oncpu("cpu_pct(%)");
-  Bucket srcline("src_line");
+  Bucket srcline(param.call_line ? "call_line" : "src_line");
   hist.init_key(target);
   if (param.srcline) {
     // add srcline to all buckets
