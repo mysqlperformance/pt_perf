@@ -49,6 +49,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -P / --perf            --- perf tool path, 'perf' by default
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
              --srcline         --- show the address, source file and line number of functions
+             --call_line       --- similar to 'srcline', but show the call location of child functions
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
         -h / --help            --- show this help
 
@@ -131,7 +132,7 @@ make
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
   ```
 
-  * 显示函数的地址，源文件路径和行号，需要指定 '--srcline'。
+  * 显示函数的地址，源文件路径和行号，需要指定 '--srcline'，用 '--call_line' 可以显示子函数是从目标函数的哪一行调用的，方便排查多个相同子函数调用时，确定瓶颈是在哪个位置。
 
 ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcline

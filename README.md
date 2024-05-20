@@ -54,6 +54,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -P / --perf            --- perf tool path, 'perf' by default
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
              --srcline         --- show the address, source file and line number of functions
+             --call_line       --- similar to 'srcline', but show the call location of child functions
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
         -h / --help            --- show this help
 
@@ -125,7 +126,7 @@ make
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
 ```
 
-- Show the function address, source file and line number with '--srcline'.
+- Show the function address, source file and line number with '--srcline'. We can also show the called location of child function by '--call_line'.
 
 ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcline

@@ -368,6 +368,7 @@ bool perf_event_paranoid_check(int max_level);
 extern int sysctl_perf_event_max_stack;
 extern int sysctl_perf_event_max_contexts_per_stack;
 extern unsigned int proc_map_timeout;
+extern struct evlist * global_evlist;
 
 #define PAGE_SIZE_NAME_LEN	32
 char *get_page_size_name(u64 size, char *str);

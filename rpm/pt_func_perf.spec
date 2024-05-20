@@ -17,6 +17,7 @@ BuildRequires: devtoolset-7-libasan-devel
 BuildRequires: devtoolset-7-libatomic-devel
 BuildRequires: python-3.8.2
 BuildRequires: kernel-headers = 4.19.91
+BuildRequires: slang = 2.2.4
 %define _prefix /usr/share/pt_func_perf
 
 %description
