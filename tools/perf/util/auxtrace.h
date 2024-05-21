@@ -30,9 +30,10 @@ extern int *worker_pids;
 extern u64 parallel_file_offset_start;
 extern size_t cpu_thread_size;
 extern size_t cpu_thread_last_psb_add;
-extern const char *func_filter;
+extern const char *func_filter_str;
 extern const char *opt_dso_name;
 extern int thread_filter;
+bool func_filter_match(const char *name);
 
 union perf_event;
 struct perf_session;

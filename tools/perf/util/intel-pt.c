@@ -1871,8 +1871,8 @@ static bool intel_pt_func_filter_by_sym(
 				&& (!to_al->sym || strcmp(to_al->sym->name, "__schedule"))) {
 			return true;
 		}
-	} else if ((!from_al->sym || strcmp(from_al->sym->name, func_filter))
-		&& (!to_al->sym || strcmp(to_al->sym->name, func_filter))) {
+	} else if ((!from_al->sym || !func_filter_match(from_al->sym->name))
+		&& (!to_al->sym || !func_filter_match(to_al->sym->name))) {
 		return true;
 	}
 	return false;
@@ -1940,7 +1940,7 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 	}
 
 	// function filter
-	if (strlen(func_filter) > 0) {
+	if (strlen(func_filter_str) > 0) {
 		struct addr_location from_al, to_al;
 		if (fil_syms_size > 0 && intel_pt_func_filter_by_ip(&from_al, &to_al, ptq, &sample)) {
 			return 0;

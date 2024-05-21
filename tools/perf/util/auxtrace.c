@@ -81,12 +81,18 @@ static size_t parallel_auxtrace_size = 0;
 static size_t auxtrace_size_added = 0;
 
 // script filter
-const char *func_filter = "";
-const char *opt_dso_name = "";
 #define MAX_FILTER_SYMBOL 1024
+const char *func_filter_str = "";
+const char *opt_dso_name = "";
+
+const char *func_filter[MAX_FILTER_SYMBOL];
+size_t func_filter_num = 0;
 struct symbol fil_syms[MAX_FILTER_SYMBOL];
 size_t fil_syms_size = 0;
+
 int thread_filter = -1;
+
+
 
 int *worker_pids = NULL;
 
@@ -96,6 +102,52 @@ struct parallel_cache_entry cpu_batch_events[MAX_CPUS];
 struct auxtrace_cache *thread_batch_events = NULL;
 size_t cpu_thread_size = 0; // cpu or thread size in current parallel batch
 size_t cpu_thread_last_psb_add = 0; // the number last psb add in parallel batch
+
+static struct dso *load_dso(const char *name);
+static void func_filter_generate_fil_sym(void) {
+  if (func_filter_num && strlen(opt_dso_name) > 0) {
+    // find all symbols with 'func_filter' name
+    struct dso *dso = load_dso(opt_dso_name);
+    struct symbol *sym = dso__first_symbol(dso);
+    while (sym) {
+      for (size_t i = 0; i < func_filter_num; ++i) {
+        const char *func_name = func_filter[i];
+        if (!arch__compare_symbol_names(func_name, sym->name) && fil_syms_size < MAX_FILTER_SYMBOL){
+          fil_syms[fil_syms_size].start = sym->start;
+          fil_syms[fil_syms_size].end = sym->end;
+          fil_syms_size++;
+        }
+      }
+      sym = dso__next_symbol(sym);
+    }
+  }
+}
+
+static void func_filter_init(void) {
+	char *p;
+	if (!strlen(func_filter_str))
+		return;
+	p = (char *) func_filter_str;
+	func_filter[func_filter_num++] = p;
+	while (*p != '\0') {
+		if (*p == ',' && *(p+1) != '\0') {
+			*p = '\0';
+			func_filter[func_filter_num++] = p + 1;
+		}
+		p++;
+	}
+
+	func_filter_generate_fil_sym();
+}
+
+bool func_filter_match(const char *name) {
+	for (size_t i = 0; i < func_filter_num; ++i) {
+		const char *func_name = func_filter[i];
+		if (!strcmp(name, func_name))
+			return true;
+	}
+	return false;
+}
 
 /*
  * Make a group from 'leader' to 'last', requiring that the events were not
@@ -1124,7 +1176,6 @@ static int auxtrace_queues__process_index_entry(struct auxtrace_queues *queues,
 						  ent->file_offset, ent->sz);
 }
 
-static struct dso *load_dso(const char *name);
 int auxtrace_queues__process_index(struct auxtrace_queues *queues,
 				   struct perf_session *session)
 {
@@ -1158,19 +1209,10 @@ int auxtrace_queues__process_index(struct auxtrace_queues *queues,
 		memset(cpu_batch_events, 0, sizeof(struct parallel_cache_entry) * MAX_CPUS);
 		thread_batch_events = auxtrace_cache__new(12, sizeof(struct parallel_cache_entry), 10000);
 	}
-  if (strlen(func_filter) > 0 && strlen(opt_dso_name) > 0) {
-    // find all symbols with 'func_filter' name
-    struct dso *dso = load_dso(opt_dso_name);
-    struct symbol *sym = dso__first_symbol(dso);
-    while (sym) {
-      if (!arch__compare_symbol_names(func_filter, sym->name) && fil_syms_size < MAX_FILTER_SYMBOL){
-        fil_syms[fil_syms_size].start = sym->start;
-        fil_syms[fil_syms_size].end = sym->end;
-        fil_syms_size++;
-      }
-      sym = dso__next_symbol(sym);
-    }
-  }
+
+	/* init func_filter */
+	func_filter_init();
+
 	list_for_each_entry(auxtrace_index, &session->auxtrace_index, list) {
 		for (i = 0; i < auxtrace_index->nr; i++) {
 			ent = &auxtrace_index->entries[i];

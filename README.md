@@ -52,6 +52,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -i / --ip_filter       --- use ip_filter when tracing function
         -I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default
         -P / --perf            --- perf tool path, 'perf' by default
+        -a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
              --srcline         --- show the address, source file and line number of functions
              --call_line       --- similar to 'srcline', but show the call location of child functions

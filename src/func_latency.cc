@@ -21,6 +21,8 @@ static string trace_error_str = " instruction trace error";
 static atomic<uint64_t> miss_trace_time{0};
 /* the real trace time based on minimum and maximum timestamp of actions */
 static std::pair<uint64_t, uint64_t> real_trace_time = {UINT64_MAX, 0};
+static atomic<uint64_t> ancestor_begin_count{0};
+static atomic<uint64_t> ancestor_end_count{0};
 /* use to decode source file and line number */
 static SrclineMap srcline_map;
 Param param;
@@ -43,6 +45,8 @@ Param::Param() {
   offcpu = false;
   srcline = false;
   call_line = false;
+
+  ancestor = "";
 
   timeline = false;
   timeline_unit = 1;
@@ -78,6 +82,7 @@ struct option opts[] = {
   {"timeline_unit", 1, NULL, '3'},
   {"tu", 1, NULL, '3'},
   {"history", 1, NULL, '2'},
+  {"ancestor", 1, NULL, 'a'},
   {"offcpu", 0, NULL, 'o'},
   {"srcline", 0, NULL, '5'},
   {"call_line", 0, NULL, '6'},
@@ -88,7 +93,7 @@ struct option opts[] = {
   {"help", 0, NULL, 'h'},
   {NULL, 0, NULL, 0}
 };
-const char *opt_str = "hvsitolb:f:d:p:T:C:P:w:I:F:";
+const char *opt_str = "hvsitolb:f:d:p:T:C:P:a:w:I:F:";
 
 static void usage() {
   printf(
@@ -109,6 +114,7 @@ static void usage() {
     "\t-i / --ip_filter       --- use ip_filter when tracing function\n"
     "\t-I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default\n"
     "\t-P / --perf            --- perf tool path, 'perf' by default\n"
+    "\t-a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
     "\t     --srcline         --- show the address, source file and line number of functions\n"
     "\t     --call_line       --- similar to 'srcline', but show the call location of child functions\n"
@@ -225,7 +231,7 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
   
   if (param.srcline && static_cast<int64_t>(addr) > 0) {
     uint64_t func_addr = addr-offset;
-    if (name != param.target) {
+    if (name != param.target && name != param.ancestor) {
       if (param.call_line && caller) {
         // show the source line of the call address
         func_addr = caller->addr;
@@ -258,17 +264,41 @@ void ThreadJob::do_analyze() {
   Action *target_begin = nullptr;
   bool prev_target_error = false;
 
+  bool check_ancestor = (param.ancestor != "");
+  Action *ancestor_begin = nullptr;
+
+  auto clear_context = [&]() {
+    stack.clear();
+    child.clear();
+    sched_in_child = sched_in_target = 0;
+    sched_begin = nullptr;
+    ancestor_begin = nullptr;
+  };
+
   for (size_t i = 0; i < actions.size(); ++i) {
     Action &action = actions[i];
 
     if (action.is_error) {
       /* encounter trace error, discard current execution chain */
-      stack.clear();
-      child.clear();
-      sched_in_child = sched_in_target = 0;
-      sched_begin = nullptr;
+      clear_context();
       prev_target_error = true;
       continue;
+    }
+
+    if (check_ancestor) {
+      if (action.ancestor_begin) {
+        clear_context();
+        ancestor_begin = &action;
+        ancestor_begin_count.fetch_add(1);
+        continue;
+      } else if (action.ancestor_end) {
+        ancestor_begin = nullptr;
+        ancestor_end_count.fetch_add(1);
+        continue;
+      } else if (!ancestor_begin) {
+        // we only add target function within the ancestor
+        continue;
+      }
     }
 
     if (action.to.offset == 0 && action.to_target) {
@@ -478,12 +508,6 @@ void ParseJob::decode_to_actions() {
         //  printf("Thread %d lost data at timestamp %lld\n", action.tid, action.ts);
         continue;
       }
-      if (line.find(param.target) == string::npos &&
-         (!param.offcpu || (line.find(
-          param.sched_funcname) == string::npos))) {
-        // contain no required functions
-        continue;
-      }
 
       /* action thread */
       size_t start = 0;
@@ -548,9 +572,24 @@ void ParseJob::decode_to_actions() {
         }
       }
 
+      /* action for ancestor function */
+      action.ancestor_begin = action.ancestor_end = false;
+      if (param.ancestor != "") {
+        if (action.to.name == param.ancestor &&
+            action.to.offset == 0 && (action.type == Action::CALL
+            || action.type == Action::TR_START)) {
+          action.ancestor_begin = true;
+        } else if (action.from.name == param.ancestor &&
+                   (action.type == Action::RETURN ||
+                    action.type == Action::TR_END_RETURN)) {
+          action.ancestor_end = true;
+        }
+      }
+
       if (!action.from_target && !action.to_target &&
-          !action.sched_begin && !action.sched_end) {
-        /* current action does not contain target
+          !action.sched_begin && !action.sched_end &&
+          !action.ancestor_begin && !action.ancestor_end) {
+        /* current action does not contain target, ancestor,
          * and sched functions, discard it */
         continue;
       }
@@ -844,6 +883,14 @@ static void analyze_funcs() {
     miss_trace_time.store(miss_trace_time.load() / thread_jobs.size());
   printf("[ miss trace time: %0.2f seconds ]\n", (double) miss_trace_time.load() / NSECS_PER_SECS);
 
+  if (param.ancestor != "") {
+    char title[1024];
+    snprintf(title, 1024,
+        "[ ancestor: %s, call: %llu, return: %llu ]", param.ancestor.c_str(),
+        ancestor_begin_count.load(), ancestor_end_count.load());
+    print_title(title);
+  }
+
   /* print summary */
   print_stat(thread_jobs);
 
@@ -870,8 +917,18 @@ static void perf_record() {
 
   /* record filter */
   if (param.ip_filtering) {
-    if (!param.offcpu)
-      param.offcpu_filter = "";
+    string filter2 = "";
+    if (param.offcpu)
+      filter2 = param.offcpu_filter;
+    if (param.ancestor != "") {
+      if (param.offcpu) {
+        printf("ERROR: under ip_filter, offcpu and ancestor filter "
+               "can not be set at the same time.\n");
+        exit(0);
+      }
+      filter2 = "filter " + param.ancestor +
+                 " #0 @ " + binary + ",";
+    }
     if (binary == "") {
       // kernel function
       param.func_idx = "";
@@ -880,7 +937,7 @@ static void perf_record() {
       binary = "@ " + binary;
     }
     snprintf(record_filter, 1024, "--filter '%sfilter %s %s %s'",
-             param.offcpu_filter.c_str(), param.target.c_str(),
+             filter2.c_str(), param.target.c_str(),
              param.func_idx.c_str(), binary.c_str());
   }
 
@@ -938,9 +995,17 @@ static void perf_script() {
   /* script filter */
   if (param.parallel_script) {
     // ip filter
-    if (!param.ip_filtering && param.target != "" && param.binary != "")
-      script_filter << " --func_filter=\"" << param.target << "\""
-                    << " --opt_dso_name=\"" << param.binary << "\"";
+    if (!param.ip_filtering) {
+      if (param.target != "") {
+        script_filter << " --func_filter=\"" << param.target;
+        if (param.ancestor != "")
+          script_filter << "," << param.ancestor;
+        script_filter << "\"";
+      }
+      if (param.binary != "") {
+        script_filter << " --opt_dso_name=\"" << param.binary << "\"";
+      }
+    }
     // thread filter
     if (param.tid != -1)
       script_filter << " --thread_filter=" << param.tid;
@@ -1117,6 +1182,13 @@ int main(int argc, char *argv[]) {
           printf("Warning: addr2line command not found, run without srcline.\n");
           param.srcline = false;
         }
+        if (param.binary == "") {
+          printf("Warning: binary path is empty, run without srcline.\n");
+          param.srcline = false;
+        }
+        break;
+      case 'a':
+        param.ancestor = string(optarg);
         break;
       case '2':
         param.history = atol(optarg);

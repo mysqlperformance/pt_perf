@@ -30,6 +30,8 @@ struct Param {
   bool srcline;
   bool call_line;
 
+  std::string ancestor;
+
   bool timeline;
   uint32_t timeline_unit;
   std::pair<uint64_t, uint64_t> latency_interval;
@@ -79,8 +81,10 @@ struct Action {
   long lnum;
   bool from_target;
   bool to_target;
-  bool sched_begin; // begin of schedule
-  bool sched_end; // end of schedule
+  bool sched_begin;  // begin of schedule
+  bool sched_end;    // end of schedule
+  bool ancestor_begin; // begin of ancestor func
+  bool ancestor_end;   // end of ancestor func
   bool is_error;
 };
 
