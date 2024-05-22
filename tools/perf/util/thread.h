@@ -159,6 +159,15 @@ static inline bool thread__is_filtered(struct thread *thread)
 	return false;
 }
 
+static inline bool thread__is_filter_by_tid(pid_t tid)
+{
+	if (symbol_conf.tid_list &&
+	    !intlist__has_entry(symbol_conf.tid_list, tid)) {
+		return true;
+	}
+	return false;
+}
+
 void thread__free_stitch_list(struct thread *thread);
 
 void thread__resolve(struct thread *thread, struct addr_location *al,

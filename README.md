@@ -41,9 +41,9 @@ Linux version 4.2+ is required for Intel PT
 Linux version 5.10+ is required for IP filtering when tracing
         -b / --binary          --- binary file path, empty for kernel function
         -f / --func            --- target's func name
-        -d / --duration        --- trace time (seconds)
+        -d / --duration        --- trace time (seconds), 0.01 seconds by default
         -p / --pid             --- existing process ID
-        -T / --tid             --- existing thread ID
+        -T / --tid             --- existing thread ID (comma separated list), example like tid1,tid2
         -C / --cpu             --- cpu list to trace, example like 0-47
         -w / --worker_num      --- parallel worker num, 10 by default
         -s / --parallel_script --- if use parallel script
@@ -56,12 +56,12 @@ Linux version 5.10+ is required for IP filtering when tracing
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
              --srcline         --- show the address, source file and line number of functions
              --call_line       --- similar to 'srcline', but show the call location of child functions
+        --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
         -h / --help            --- show this help
 
 Timeline mode:
         -l / --timeline        --- show the target's func's latency by timeline for each thread
-        --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         --ti/--time_interval   --- show the trace between the time interval (ns), format:"start,min,max"
         --tu/--timeline_unit   --- the unit size in the timeline grapth, we caculate the average
                                    latency in the unit, 1 by default

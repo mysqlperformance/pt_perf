@@ -61,6 +61,7 @@
 #include "symbol/kallsyms.h"
 #include <internal/lib.h>
 #include "util/sample.h"
+#include "util/thread.h"
 
 int parallel_worker = 1; // worker number to do perf script
 int parallel_by_events = 0;
@@ -89,10 +90,6 @@ const char *func_filter[MAX_FILTER_SYMBOL];
 size_t func_filter_num = 0;
 struct symbol fil_syms[MAX_FILTER_SYMBOL];
 size_t fil_syms_size = 0;
-
-int thread_filter = -1;
-
-
 
 int *worker_pids = NULL;
 
@@ -590,8 +587,7 @@ static int auxtrace_queues__get_auxtrace_size(struct perf_session *session,
 		}
     // per-thread mode, we do thread filter here
     if (event->auxtrace.cpu == UINT_MAX &&
-        thread_filter != -1 &&
-        (int)event->auxtrace.tid != thread_filter)
+				thread__is_filter_by_tid(event->auxtrace.tid))
       return 0;
 		return event->auxtrace.size;
 	}
@@ -619,8 +615,7 @@ static int auxtrace_queues__add_indexed_event(struct auxtrace_queues *queues,
 		}
     // per-thread mode, we do thread filter here
     if (event->auxtrace.cpu == UINT_MAX &&
-        thread_filter != -1 &&
-        (int)event->auxtrace.tid != thread_filter)
+				thread__is_filter_by_tid(event->auxtrace.tid))
       goto out;
 		file_offset += event->header.size;
 		err = auxtrace_queues__add_event(queues, session, event,

@@ -18,7 +18,7 @@ struct Param {
   std::string target;
   float trace_time;
   long pid;
-  long tid;
+  std::string tid;
   std::string cpu;
   bool verbose;
   bool parallel_script;

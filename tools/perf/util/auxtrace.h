@@ -32,7 +32,6 @@ extern size_t cpu_thread_size;
 extern size_t cpu_thread_last_psb_add;
 extern const char *func_filter_str;
 extern const char *opt_dso_name;
-extern int thread_filter;
 bool func_filter_match(const char *name);
 
 union perf_event;

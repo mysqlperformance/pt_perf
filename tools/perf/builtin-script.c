@@ -3995,8 +3995,6 @@ int cmd_script(int argc, const char **argv)
 		   "only decode specified functions, with comma as separator"),
 	OPT_STRING(0, "opt_dso_name", &opt_dso_name, "opt_dso_name",
 		   "dso name for decoding trace"),
-	OPT_INTEGER(0, "thread_filter", &thread_filter,
-		    "only decode specified thread"),
 	OPTS_EVSWITCH(&script.evswitch),
 	OPT_END()
 	};

@@ -34,7 +34,7 @@ Param::Param() {
   target = "";
   trace_time = 0.01;
   pid = -1;
-  tid = -1;
+  tid = "";
   cpu = "";
   verbose = false;
   parallel_script = false;
@@ -103,9 +103,9 @@ static void usage() {
     "Linux version 5.10+ is required for IP filtering when tracing\n"
     "\t-b / --binary          --- binary file path, empty for kernel func\n"
     "\t-f / --func            --- target's func name\n"
-    "\t-d / --duration        --- trace time (seconds)\n"
+    "\t-d / --duration        --- trace time (seconds), 0.01 seconds by default\n"
     "\t-p / --pid             --- existing process ID\n"
-    "\t-T / --tid             --- existing thread ID\n"
+    "\t-T / --tid             --- existing thread ID (comma separated list), example like tid1,tid2\n"
     "\t-C / --cpu             --- cpu list to trace, example like 0-47\n"
     "\t-w / --worker_num      --- parallel worker num, 10 by default\n"
     "\t-s / --parallel_script --- if use parallel script\n"
@@ -118,12 +118,12 @@ static void usage() {
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
     "\t     --srcline         --- show the address, source file and line number of functions\n"
     "\t     --call_line       --- similar to 'srcline', but show the call location of child functions\n"
+    "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
     "\n"
     "Timeline mode:\n"
     "\t-l / --timeline        --- show the target's func's latency by timeline for each thread\n"
-    "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t--ti/--time_interval   --- show the trace between the time interval (ns), format:\"start,min,max\"\n"
     "\t--tu/--timeline_unit   --- the unit size in the timeline grapth, we caculate the average\n" 
     "\t                           latency in the unit, 1 by default\n"
@@ -149,7 +149,7 @@ static void dump_options() {
   printf("target: %s\n", param.target.c_str());
   printf("trace duration: %f\n", param.trace_time);
   printf("pid: %d\n", param.pid);
-  printf("tid: %d\n", param.tid);
+  printf("tid: %s\n", param.tid.c_str());
   printf("time_interval: %llu - %llu\n",
       param.time_interval.first, param.time_interval.second);
   printf("latency_interval: %llu - %llu\n",
@@ -955,9 +955,9 @@ static void perf_record() {
       printf("Warning: ip filtering is not support for CPU tracing, turn it off\n");
       param.ip_filtering = false;
     }
-  } else if (param.tid != -1) {
+  } else if (param.tid != "") {
     trace_param << " -t " << param.tid;
-    printf("[ trace thread %ld for %.2f seconds ]\n", param.tid, param.trace_time);
+    printf("[ trace thread %s for %.2f seconds ]\n", param.tid.c_str(), param.trace_time);
   } else if (param.pid != -1) {
     trace_param << " -p " << param.pid;
     printf("[ trace process %ld for %.2f seconds ]\n", param.pid, param.trace_time);
@@ -1007,8 +1007,8 @@ static void perf_script() {
       }
     }
     // thread filter
-    if (param.tid != -1)
-      script_filter << " --thread_filter=" << param.tid;
+    if (param.tid != "")
+      script_filter << " --tid=" << param.tid;
     // time filter
     if (param.time_interval.first != 0
         || param.time_interval.second != UINT64_MAX) {
@@ -1126,7 +1126,7 @@ int main(int argc, char *argv[]) {
         param.pid = atol(optarg);
         break;
       case 'T':
-        param.tid = atol(optarg);
+        param.tid = string(optarg);
         break;
       case 'C':
         param.cpu = string(optarg);

@@ -1935,7 +1935,7 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 	sample.stream_id = ptq->pt->branches_id;
 
 	// thread filter
-	if (thread_filter != -1 && (u32)thread_filter != sample.tid) {
+	if (thread__is_filter_by_tid(sample.tid)) {
 		return 0;
 	}
 
