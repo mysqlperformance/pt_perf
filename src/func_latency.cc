@@ -157,7 +157,7 @@ static void dump_options() {
 }
 
 bool SrclineMap::get(const std::string &function, std::string &srcline) {
-  srcline = " ";
+  srcline = "-";
   shared_lock<shared_mutex> rlock(srcline_mutex);
   auto it = srcline_map.find(function);
   if (it != srcline_map.end()) {
@@ -232,9 +232,14 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
   if (param.srcline && static_cast<int64_t>(addr) > 0) {
     uint64_t func_addr = addr-offset;
     if (name != param.target && name != param.ancestor) {
-      if (param.call_line && caller) {
-        // show the source line of the call address
-        func_addr = caller->addr;
+      if (param.call_line) {
+        if (caller) {
+          // show the source line of the call address
+          func_addr = caller->addr;
+        } else {
+          // 'from' symbol has no call address
+          return {name, addr, offset};
+        }
       }
       stringstream ss;
       ss << "(" << std::hex << func_addr << std::dec << ")";
@@ -403,7 +408,21 @@ void ThreadJob::do_analyze() {
           stack.clear();
         } else if (stack.size() == 2 && action.type != Action::TR_END_RETURN) {
           // return to target function from sub function
-          string &child_name = stack.back().to.name;
+          string child_name = stack.back().to.name;
+          if (!action.from.equal(&stack.back().to)) {
+            // target may calls inline function, but returns from another functions
+            if (param.call_line) {
+              // 'from' function has not call address, we assign one
+              uint64_t call_addr = stack.back().from.addr;
+              stringstream ss;
+              ss << action.from.name << "(" << std::hex << call_addr << std::dec << ")";
+              child_name = ss.str();
+              // only for user symbol
+              if(!srcline_map.get(child_name)) srcline_map.put(child_name, call_addr);
+            } else {
+              child_name = action.from.name;
+            }
+          }
           child.add_target(child_name, (action.ts - stack.back().ts));
           child.add_sched(child_name, sched_in_child);
           stack.pop_back();
@@ -826,10 +845,6 @@ static void analyze_funcs() {
   }
   worker_pool.wait_all_idle();
 
-  if (param.srcline) {
-    srcline_map.process_address();
-  }
-
   auto t2 = ut_time_now();
   printf("[ parse actions has consumed %.2f seconds ]\n",
           ut_time_diff(t2, t1));
@@ -889,6 +904,10 @@ static void analyze_funcs() {
         "[ ancestor: %s, call: %llu, return: %llu ]", param.ancestor.c_str(),
         ancestor_begin_count.load(), ancestor_end_count.load());
     print_title(title);
+  }
+
+  if (param.srcline) {
+    srcline_map.process_address();
   }
 
   /* print summary */
