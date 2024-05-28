@@ -97,7 +97,7 @@ void addr2line(const std::string &binary,
 
   filename = "";
   line_nr = 0;
-  cmd << "addr2line -i -e " << binary << " "
+  cmd << "addr2line -e " << binary << " "
       << std::hex << address << std::dec;
   FILE* a2l = popen(cmd.str().c_str(), "r");
   if (!a2l) return;
@@ -125,6 +125,7 @@ void addr2line(const std::string &binary,
   for (size_t i = 0; i < address_vec.size(); ++i) {
     cmd << " " << std::hex << address_vec[i] << std::dec;
   }
+  cmd << " 2> /dev/null";
   FILE* a2l = popen(cmd.str().c_str(), "r");
   if (!a2l) return;
 
@@ -137,7 +138,7 @@ void addr2line(const std::string &binary,
   }
 
   if (filename_vec.size() != address_vec.size()) {
-    printf("ERROR: the line number is not equal to the address number\n"
+    printf("ERROR: the line number is not equal to the address number, "
            " the command is '%s'\n",cmd.str().c_str());
   }
 
