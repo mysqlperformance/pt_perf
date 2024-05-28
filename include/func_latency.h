@@ -32,6 +32,8 @@ struct Param {
 
   std::string ancestor;
 
+  bool code_block;
+
   bool timeline;
   uint32_t timeline_unit;
   std::pair<uint64_t, uint64_t> latency_interval;
@@ -109,17 +111,23 @@ public:
   struct LatencyChild {
     Bucket target;
     Bucket sched;
+    uint64_t target_total;
+    uint64_t sched_total;
+    LatencyChild() : target_total(0), sched_total(0) {}
     void clear() {
+      target_total = sched_total = 0;
       target.clear();
       sched.clear();
     }
     bool empty() { return target.empty() && sched.empty();}
     void add_target(const std::string &name, uint64_t lat) {
       target.add_val(name, lat);
+      target_total += lat;
     }
     void add_sched(const std::string &name, uint64_t lat) {
       if (lat == 0) return;
       sched.add_val(name, lat);
+      sched_total += lat;
     }
     void add_child(LatencyChild &child) {
       target.add_bucket(child.target);
@@ -167,26 +175,7 @@ public:
     callers[caller].add_child(child);
   }
   
-  void add(Action &action_call, Action &action_return, uint64_t lat_s, LatencyChild &child) { 
-    uint64_t lat_t = action_return.ts - action_call.ts;
-    std::string &caller = action_return.to.name;
-    if (lat_t < param.latency_interval.first || lat_t > param.latency_interval.second ||
-        action_call.ts < param.time_interval.first || action_call.ts > param.time_interval.second) {
-      return;
-    }
-    if (param.timeline && action_call.ts >= param.time_start) {
-      timeline_unit_lat += lat_t;
-      if (++timeline_unit == param.timeline_unit) {
-        // caculate the average for one timeline_unit
-        timeline.push_back({(action_call.ts - param.time_start) / 1000.0,
-                             timeline_unit_lat / timeline_unit / 1000.0}); // us
-        timeline_unit_lat = timeline_unit = 0;
-      }
-    } else {
-      add_latency(lat_t, lat_s, caller);
-      add_child_latency(child, caller);
-    }
-  }
+  void add(Action &action_call, Action &action_return, uint64_t lat_s, LatencyChild &child);
 
   void merge(Stat &stat) {
     latency.merge(stat.latency);

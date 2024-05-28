@@ -28,18 +28,6 @@ static void print_stars(uint64_t val, uint64_t val_max, int width)
     printf("+");
 }
 
-void HistogramBucket::init_key(Bucket &b) {
-  for (auto it = b.slots.begin(); it != b.slots.end(); ++it) {
-    Bucket::Element &el = it->second;
-    if (el.total > total_max) {
-      total_max = el.total;
-    }
-    el.name = it->first;
-    keys.push_back(el);
-  }
-  std::sort(keys.begin(), keys.end());
-}
-
 uint32_t HistogramBucket::get_print_width(uint32_t bucket_num) {
   uint32_t print_width = 0;
   print_width += 63;
@@ -63,7 +51,7 @@ void HistogramBucket::print() {
   for (auto it = keys.begin(); it != keys.end(); ++it) {
     Bucket::Element &el = *it;
     const string &name = el.name;
-    printf("%-*s : %-10d %-10d", 40, name.substr(0, 40).c_str(),
+    printf("%-*s : %-10d %-10d", 40, el.val_str.substr(0, 40).c_str(),
             el.get_avg(), el.count);
     for (Bucket *bucket : extra_buckets) {
       if (bucket->slots.count(name)) {

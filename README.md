@@ -53,9 +53,9 @@ Linux version 5.10+ is required for IP filtering when tracing
         -I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default
         -P / --perf            --- perf tool path, 'perf' by default
         -a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain
-             --history         --- for history trace, 1: generate perf.data, 2: use perf.data
+        -c / --code_block      --- show the code block latency of target function
              --srcline         --- show the address, source file and line number of functions
-             --call_line       --- similar to 'srcline', but show the call location of child functions
+             --history         --- for history trace, 1: generate perf.data, 2: use perf.data
         --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
         -h / --help            --- show this help
@@ -127,8 +127,13 @@ make
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
 ```
 
-- Show the function address, source file and line number with '--srcline'. We can also show the called location of child function by '--call_line'.
+- In addition to including the latency of child function, also show the code block latency (-c). the code block contains where one branch ends and where another branch starts, we can analyze the most expensive instruction against the program assembly code.
 
+```shell
+sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -c
+```
+
+- Instead of showing the call address and filename, source line, we show the define line of functions.
 ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcline
 ```
@@ -233,17 +238,17 @@ sched total: 205337, sched each time: 517752 ns
 
 ```shell
 Histogram - Child functions's Latency of [do_command]:
-                    name                 : avg        cnt        sched_time cpu_pct(%) distribution (total)
-Protocol_classic::get_command            : 502643     211244     495234     156.51    |********************|
-asm_sysvec_call_function_single          : 192055     7          189609     0.00      |                    |
-dispatch_command                         : 107245     211347     8025       2096.98   |****                |
-asm_sysvec_apic_timer_interrupt          : 50563      35         43869      0.02      |                    |
-__irqentry_text_start                    : 14598      195        3143       0.22      |                    |
-vio_description                          : 338        211347     5          7.03      |                    |
-my_net_set_read_timeout                  : 40         422591     1          1.64      |                    |
-Diagnostics_area::reset_diagnostics_area : 23         211244     1          0.46      |                    |
-Protocol_classic::get_output_packet      : 10         422719     0          0.44      |                    |
-Protocol_classic::get_net                : 7          211244     0          0.15      |                    |
+                    name                 : avg        cnt        call_line         sched_time cpu_pct(%) distribution (total)
+Protocol_classic::get_command            : 502643     211244     sql_parse.cc:1378 495234     156.51    |********************|
+asm_sysvec_call_function_single          : 192055     7          -                 189609     0.00      |                    |
+dispatch_command                         : 107245     211347     sql_parse.cc:1438 8025       2096.98   |****                |
+asm_sysvec_apic_timer_interrupt          : 50563      35         -                 43869      0.02      |                    |
+__irqentry_text_start                    : 14598      195        -                 3143       0.22      |                    |
+vio_description                          : 338        211347     sql_parse.cc:1420 5          7.03      |                    |
+my_net_set_read_timeout                  : 40         422591     sql_parse.cc:1434 1          1.64      |                    |
+Diagnostics_area::reset_diagnostics_area : 23         211244     sql_parse.cc:1337 1          0.46      |                    |
+Protocol_classic::get_output_packet      : 10         422719     sql_parse.cc:1439 0          0.44      |                    |
+Protocol_classic::get_net                : 7          211244     sql_parse.cc:1345 0          0.15      |                    |
 ```
 
 - Show the latency of 'do_command' called from 'handle_connection'.
@@ -273,17 +278,44 @@ sched count: 199813,   sched latency: 503275 ns, cpu percent: 2264 %
 
 ```shell
 Histogram - Child functions's Latency of [do_command] called from [handle_connection]:
-                    name                 : avg        cnt        sched_time cpu_pct(%) distribution (total)
-Protocol_classic::get_command            : 502643     211244     495234     156.51    |********************|
-asm_sysvec_call_function_single          : 192055     7          189609     0.00      |                    |
-dispatch_command                         : 107194     211244     8012       2095.16   |****                |
-asm_sysvec_apic_timer_interrupt          : 50563      35         43869      0.02      |                    |
-__irqentry_text_start                    : 14598      195        3143       0.22      |                    |
-vio_description                          : 338        211244     5          7.03      |                    |
-my_net_set_read_timeout                  : 40         422488     1          1.64      |                    |
-Diagnostics_area::reset_diagnostics_area : 23         211244     1          0.46      |                    |
-Protocol_classic::get_output_packet      : 10         422488     0          0.44      |                    |
-Protocol_classic::get_net                : 7          211244     0          0.15      |                    |
+                    name                 : avg        cnt        call_line         sched_time cpu_pct(%) distribution (total)
+Protocol_classic::get_command            : 502643     211244     sql_parse.cc:1378 495234     156.51    |********************|
+asm_sysvec_call_function_single          : 192055     7          -                 189609     0.00      |                    |
+dispatch_command                         : 107194     211244     sql_parse.cc:1438 8012       2095.16   |****                |
+asm_sysvec_apic_timer_interrupt          : 50563      35         -                 43869      0.02      |                    |
+__irqentry_text_start                    : 14598      195        -                 3143       0.22      |                    |
+vio_description                          : 338        211244     sql_parse.cc:1420 5          7.03      |                    |
+my_net_set_read_timeout                  : 40         422488     sql_parse.cc:1434 1          1.64      |                    |
+Diagnostics_area::reset_diagnostics_area : 23         211244     sql_parse.cc:1337 1          0.46      |                    |
+Protocol_classic::get_output_packet      : 10         422488     sql_parse.cc:1439 0          0.44      |                    |
+Protocol_classic::get_net                : 7          211244     sql_parse.cc:1345 0          0.15      |                    |
+```
+
+- Show the latency of code block.
+
+```shell
+Histogram - Child functions's Latency of [do_command]:
+                    name                 : avg        cnt        call_line                            sched_time cpu_pct(%) distribution (total)
+Protocol_classic::get_command            : 502643     211244     sql_parse.cc:1378                    495234     156.51    |********************|
+asm_sysvec_call_function_single          : 192055     7          -                                    189609     0.00      |                    |
+dispatch_command                         : 107245     211347     sql_parse.cc:1438                    8025       2096.98   |****                |
+asm_sysvec_apic_timer_interrupt          : 50563      35         -                                    43869      0.02      |                    |
+__irqentry_text_start                    : 14598      195        -                                    3143       0.22      |                    |
+vio_description                          : 338        211347     sql_parse.cc:1420                    5          7.03      |                    |
+my_net_set_read_timeout                  : 40         422591     sql_parse.cc:1434                    1          1.64      |                    |
+Diagnostics_area::reset_diagnostics_area : 23         211244     sql_parse.cc:1337                    1          0.46      |                    |
+Protocol_classic::get_output_packet      : 10         422719     sql_parse.cc:1439                    0          0.44      |                    |
+*code block: 454-463                     : 18         10518      sql_parse.cc:1434-sql_parse.cc:1434  0          0.18      |                    |
+*code block: 162-182                     : 17         10518      sql_parse.cc:1381-sql_parse.cc:1381  0          0.17      |                    |
+*code block: 729-739                     : 17         10517      sql_parse.cc:1439-sql_parse.cc:1439  0          0.18      |                    |
+*code block: 441-448                     : 4          10518      sql_string.h:387-sql_string.h:387    0          0.05      |                    |
+*code block: 88-118                      : 3          10518      sql_class.h:4943-sql_parse.cc:1347   0          0.03      |                    |
+*code block: 712-724                     : 1          10518      sql_parse.cc:1438-sql_parse.cc:1438  0          0.02      |                    |
+*code block: 429-436                     : 1          10518      sql_parse.cc:1431-sql_parse.cc:1431  0          0.01      |                    |
+*code block: 608-621                     : 1          10518      sql_string.h:388-sql_string.h:388    0          0.01      |                    |
+*code block: 468-471                     : 0          10518      sql_parse.cc:1436-sql_parse.cc:1436  0          0.00      |                    |
+*code block: 76-83                       : 0          10518      sql_parse.cc:1345-sql_parse.cc:1345  0          0.01      |                    |
+...
 ```
 
 - Trace full execution data, and save to 'perf.data'。

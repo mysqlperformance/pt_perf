@@ -114,7 +114,20 @@ private:
 class HistogramBucket {
 public:
   HistogramBucket() : total_max(0) {}
-  void init_key(Bucket &b);
+
+  template <typename Function>
+  void init_key(Bucket &b, Function f) {
+    for (auto it = b.slots.begin(); it != b.slots.end(); ++it) {
+      Bucket::Element &el = it->second;
+      if (el.total > total_max) {
+        total_max = el.total;
+      }
+      el.name = it->first;
+      el.val_str = f(el.name);
+      keys.push_back(el);
+    }
+    std::sort(keys.begin(), keys.end());
+  }
   void add_extra_bucket(Bucket *b) {
     extra_buckets.emplace_back(b);
   }

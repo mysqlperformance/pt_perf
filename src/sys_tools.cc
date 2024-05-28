@@ -139,7 +139,6 @@ void addr2line(const std::string &binary,
   if (filename_vec.size() != address_vec.size()) {
     printf("ERROR: the line number is not equal to the address number\n"
            " the command is '%s'\n",cmd.str().c_str());
-    abort();
   }
 
   free(line);

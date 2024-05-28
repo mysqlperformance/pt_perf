@@ -27,6 +27,9 @@ static atomic<uint64_t> ancestor_end_count{0};
 static SrclineMap srcline_map;
 Param param;
 
+#define CODE_BLOCK_PREFIX  "*code block: "
+#define TARGET_SELF "*self"
+
 Param::Param() {
   perf_tool = get_current_dir() + "/perf";
   perf_dlfilter = get_current_dir() + "/perf_dlfilter.so";
@@ -43,10 +46,11 @@ Param::Param() {
   ip_filtering = false;
   func_idx = "#0"; // global symbol
   offcpu = false;
-  srcline = false;
-  call_line = false;
+  srcline = true;
+  call_line = true;
 
   ancestor = "";
+  code_block = false;
 
   timeline = false;
   timeline_unit = 1;
@@ -83,9 +87,9 @@ struct option opts[] = {
   {"tu", 1, NULL, '3'},
   {"history", 1, NULL, '2'},
   {"ancestor", 1, NULL, 'a'},
+  {"code_block", 0, NULL, 'c'},
   {"offcpu", 0, NULL, 'o'},
   {"srcline", 0, NULL, '5'},
-  {"call_line", 0, NULL, '6'},
   {"per_thread", 0, NULL, 't'},
   {"ip_filter", 0, NULL, 'i'},
   {"parallel_script", 0, NULL, 's'},
@@ -93,7 +97,7 @@ struct option opts[] = {
   {"help", 0, NULL, 'h'},
   {NULL, 0, NULL, 0}
 };
-const char *opt_str = "hvsitolb:f:d:p:T:C:P:a:w:I:F:";
+const char *opt_str = "hvsitolcb:f:d:p:T:C:P:a:w:I:F:";
 
 static void usage() {
   printf(
@@ -102,7 +106,7 @@ static void usage() {
     "Linux version 4.2+ is required for Intel PT\n"
     "Linux version 5.10+ is required for IP filtering when tracing\n"
     "\t-b / --binary          --- binary file path, empty for kernel func\n"
-    "\t-f / --func            --- target's func name\n"
+    "\t-f / --func            --- target's function name\n"
     "\t-d / --duration        --- trace time (seconds), 0.01 seconds by default\n"
     "\t-p / --pid             --- existing process ID\n"
     "\t-T / --tid             --- existing thread ID (comma separated list), example like tid1,tid2\n"
@@ -115,9 +119,9 @@ static void usage() {
     "\t-I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default\n"
     "\t-P / --perf            --- perf tool path, 'perf' by default\n"
     "\t-a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain\n"
+    "\t-c / --code_block      --- show the code block latency of target function\n"
+    "\t     --srcline         --- instead of the call line, show the define line of functions\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
-    "\t     --srcline         --- show the address, source file and line number of functions\n"
-    "\t     --call_line       --- similar to 'srcline', but show the call location of child functions\n"
     "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
@@ -167,7 +171,6 @@ bool SrclineMap::get(const std::string &function, std::string &srcline) {
   return false;
 }
 
-
 void SrclineMap::process_address() {
   unique_lock<shared_mutex> wlock(srcline_mutex);
   vector<string> func_vec;
@@ -179,6 +182,10 @@ void SrclineMap::process_address() {
     addr_vec.push_back(it->second);
   }
   addr2line(param.binary, addr_vec, filename_vec, line_nr_vec);
+  if (filename_vec.size() != addr_vec.size()) {
+    printf("ERROR: addr2line failed !!!");
+    return;
+  }
   for (size_t i = 0; i < func_vec.size(); ++i) {
     string &name = func_vec[i];
     srcline_map[name] = filename_vec[i] + ":" + to_string(line_nr_vec[i]);
@@ -242,7 +249,7 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
         }
       }
       stringstream ss;
-      ss << "(" << std::hex << func_addr << std::dec << ")";
+      ss << "|" << std::hex << func_addr << std::dec;
       name += ss.str();
     }
     // only for user symbol
@@ -262,15 +269,22 @@ static void report_error_action(const string &type, uint32_t id, uint32_t lnum) 
 void ThreadJob::do_analyze() {
   vector<Action> stack;
   Stat::LatencyChild child;
+
+  // for schedule latency
   uint64_t sched_in_target = 0;
   uint64_t sched_in_child = 0;
   Action *sched_begin = nullptr;
   stat.sched_count = 0;
+
+ // to obtain miss trace time
   Action *target_begin = nullptr;
   bool prev_target_error = false;
 
+  // for ancestor filter
   bool check_ancestor = (param.ancestor != "");
   Action *ancestor_begin = nullptr;
+
+  Action *cursor = nullptr;
 
   auto clear_context = [&]() {
     stack.clear();
@@ -278,6 +292,24 @@ void ThreadJob::do_analyze() {
     sched_in_child = sched_in_target = 0;
     sched_begin = nullptr;
     ancestor_begin = nullptr;
+  };
+
+  auto add_code_block = [&](Action *a1, Action *a2) {
+    if (a2->from.offset == a1->to.offset) return;
+    std::string child_name = CODE_BLOCK_PREFIX + to_string(a1->to.offset) + "-"
+                   + to_string(a2->from.offset);
+    uint64_t lat_t = a2->ts - a1->ts;
+    uint64_t lat_s = sched_in_child;
+    child.add_target(child_name, lat_t);
+    child.add_sched(child_name, lat_s);
+    // set to obtain srcline of code block
+    if(!srcline_map.get(child_name + "_from"))
+      srcline_map.put(child_name + "_from", a1->to.addr);
+    if(!srcline_map.get(child_name + "_to"))
+      srcline_map.put(child_name + "_to", a2->from.addr);
+    assert(lat_t >= lat_s);
+    sched_in_child = 0;
+    cursor = a2;
   };
 
   for (size_t i = 0; i < actions.size(); ++i) {
@@ -292,6 +324,7 @@ void ThreadJob::do_analyze() {
 
     if (check_ancestor) {
       if (action.ancestor_begin) {
+        // mark that ancestor has began
         clear_context();
         ancestor_begin = &action;
         ancestor_begin_count.fetch_add(1);
@@ -330,6 +363,7 @@ void ThreadJob::do_analyze() {
          prev_target_error = false;
        }
        target_begin = &action;
+       cursor = &action;
        continue;
     }
 
@@ -353,7 +387,13 @@ void ThreadJob::do_analyze() {
     }
 
     if ((action.type == Action::JMP || action.type == Action::JCC)) {
-      if (action.from_target) {
+      if (action.from_target && action.to_target) {
+        // internal jump, just add code block latency
+        assert(param.code_block);
+        add_code_block(cursor, &action);
+        continue;
+      } else if (action.from_target) {
+        // change jmp instruction to call/return
         if (!action.to.offset) action.type = Action::CALL;
         else action.type = Action::RETURN;
       } else {
@@ -380,12 +420,14 @@ void ThreadJob::do_analyze() {
           stack.clear();
           report_error_action("trace", action.id, action.lnum);
         }
+        sched_in_child = 0;
         break;
       case Action::HW_INT:
       case Action::TR_END_HW_INT:
       case Action::CALL:
       case Action::TR_END_CALL:
         // this is call to sub function
+        if (param.code_block) add_code_block(cursor, &action);
         stack.push_back(action);
         if (sched_begin) {
           /* ERROR: the schedule is not finished when the child function is called */
@@ -415,7 +457,7 @@ void ThreadJob::do_analyze() {
               // 'from' function has not call address, we assign one
               uint64_t call_addr = stack.back().from.addr;
               stringstream ss;
-              ss << action.from.name << "(" << std::hex << call_addr << std::dec << ")";
+              ss << action.from.name << "|" << std::hex << call_addr << std::dec;
               child_name = ss.str();
               // only for user symbol
               if(!srcline_map.get(child_name)) srcline_map.put(child_name, call_addr);
@@ -425,6 +467,7 @@ void ThreadJob::do_analyze() {
           }
           child.add_target(child_name, (action.ts - stack.back().ts));
           child.add_sched(child_name, sched_in_child);
+          sched_in_child = 0;
           stack.pop_back();
         } else {
           // wrong chain, discard it
@@ -435,6 +478,7 @@ void ThreadJob::do_analyze() {
       default:
         abort();
     }
+    cursor = &action;
   }
 }
 
@@ -613,7 +657,7 @@ void ParseJob::decode_to_actions() {
         continue;
       }
 
-      if (action.from_target && action.to_target) {
+      if (!param.code_block && action.from_target && action.to_target) {
         /* inner-function jump, skip */
         continue;
       }
@@ -628,6 +672,7 @@ static void print_cross_line(char c) {
   uint32_t max_width = 80, num = 1;
   if (param.offcpu) num += 1;
   if (param.srcline) num += 1;
+  if (param.code_block) num += 1;
   max_width = std::max(HistogramDist::get_print_width(num), max_width);
   max_width = std::max(HistogramBucket::get_print_width(num), max_width);
   printf("\n\033[33m");
@@ -637,6 +682,32 @@ static void print_cross_line(char c) {
 
 static void print_title(const char *title) {
   printf("\033[32m%s\033[0m\n", title);
+}
+
+void Stat::add(Action &action_call, Action &action_return, uint64_t lat_s, LatencyChild &child) {
+  uint64_t lat_t = action_return.ts - action_call.ts;
+  std::string &caller = action_return.to.name;
+  if (lat_t < param.latency_interval.first || lat_t > param.latency_interval.second ||
+      action_call.ts < param.time_interval.first || action_call.ts > param.time_interval.second) {
+    return;
+  }
+  if (param.timeline && action_call.ts >= param.time_start) {
+    timeline_unit_lat += lat_t;
+    if (++timeline_unit == param.timeline_unit) {
+      // caculate the average for one timeline_unit
+      timeline.push_back({(action_call.ts - param.time_start) / 1000.0,
+                           timeline_unit_lat / timeline_unit / 1000.0}); // us
+      timeline_unit_lat = timeline_unit = 0;
+    }
+  } else {
+    add_latency(lat_t, lat_s, caller);
+    if (!param.code_block) {
+      // add latency of target function self
+      child.add_target(TARGET_SELF, lat_t - child.target_total);
+      child.add_sched(TARGET_SELF, lat_s - child.sched_total);
+    }
+    add_child_latency(child, caller);
+  }
 }
 
 void Stat::Latency::print_summary() {
@@ -655,13 +726,29 @@ void Stat::LatencyChild::print_summary() {
 
   Bucket oncpu("cpu_pct(%)");
   Bucket srcline(param.call_line ? "call_line" : "src_line");
-  hist.init_key(target);
+  hist.init_key(target, [&](const std::string &name) -> std::string {
+    if (param.srcline && !param.verbose) {
+      // print func_name without address
+      return name.substr(0, name.find_first_of('|'));
+    }
+    return name;
+  });
   if (param.srcline) {
     // add srcline to all buckets
     srcline.add_bucket(target);
     int width = 10;
     srcline.loop_for_element([&](Bucket::Element &el){
-      srcline_map.get(el.name, el.val_str);
+      if (el.name.find(CODE_BLOCK_PREFIX) != string::npos) {
+        // 'code block' latency needs the begin and end address
+        string srcline_from, srcline_to;
+        srcline_map.get(el.name + "_from", srcline_from);
+        srcline_map.get(el.name + "_to", srcline_to);
+        el.val_str = srcline_from + "-" + srcline_to;
+      } else if (el.name == TARGET_SELF) {
+        srcline_map.get(param.target, el.val_str);
+      } else {
+        srcline_map.get(el.name, el.val_str);
+      }
       if (el.val_str.size() > width)
         width = el.val_str.size();
     });
@@ -745,6 +832,8 @@ void Stat::print_summary() {
     if (param.srcline) {
       string srcline;
       srcline_map.get(caller_name, srcline);
+      if (!param.verbose)
+        caller_name = caller_name.substr(0, caller_name.find_first_of('|'));
       caller_name += ("(" + srcline + ")");
     }
     /* target function's latency from current caller */
@@ -1041,8 +1130,8 @@ static void perf_script() {
     }
   }
 
-  /* dl filter */
-  if (access(param.perf_dlfilter.c_str(), F_OK) != -1) {
+  /* use dl filter to discard internal jump of target function, if not analyze code block latency */
+  if (!param.code_block && access(param.perf_dlfilter.c_str(), F_OK) != -1) {
     script_filter << " --dlfilter=" << param.perf_dlfilter;
   }
 
@@ -1193,18 +1282,11 @@ int main(int argc, char *argv[]) {
       case '4':
         param.pt_flame_home = string(optarg);
         break;
-      case '6':
-        param.call_line = true;
       case '5':
-        param.srcline = true;
-        if (system("addr2line --help &> /dev/null")) {
-          printf("Warning: addr2line command not found, run without srcline.\n");
-          param.srcline = false;
-        }
-        if (param.binary == "") {
-          printf("Warning: binary path is empty, run without srcline.\n");
-          param.srcline = false;
-        }
+        param.call_line = false;
+        break;
+      case 'c':
+        param.code_block = true;
         break;
       case 'a':
         param.ancestor = string(optarg);
@@ -1237,6 +1319,16 @@ int main(int argc, char *argv[]) {
     }
   }
   if (param.verbose) dump_options();
+
+  if (system("addr2line --help &> /dev/null")) {
+    printf("Warning: addr2line command not found, run without srcline.\n");
+    param.srcline = false;
+  }
+
+  if (param.binary == "") {
+    printf("Warning: binary path is empty, run without srcline.\n");
+    param.srcline = false;
+  }
 
   if (param.trace_time <= 0) {
     printf("Error: trace_time must be greater than 0\n ");
