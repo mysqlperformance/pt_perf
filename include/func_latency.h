@@ -186,6 +186,7 @@ public:
     }
     sched_count += stat.sched_count;
   }
+  void generate_srcline();
   void print_summary();
   void print_timeline();
 };
@@ -325,7 +326,23 @@ public:
 private:
   std::unordered_map<std::string, uint64_t> addr_map;
   std::unordered_map<std::string, std::string> srcline_map;
-  std::shared_mutex srcline_mutex;
+  RwSpinLock m_lock;
 };
+
+inline void funcname_add_addr(std::string &name, uint64_t addr) {
+  name += ("|" + std::to_string(addr));
+}
+inline uint64_t funcname_get_addr(const std::string &name) {
+  size_t sep = name.find_first_of('|');
+  if (sep == std::string::npos)
+    return 0;
+  return stol(name.substr(sep + 1, name.size() - sep + 1));
+}
+inline std::string funcname_get_name(const std::string &name) {
+  size_t sep = name.find_first_of('|');
+  if (sep == std::string::npos)
+    return name;
+  return name.substr(0, sep);
+}
 
 #endif

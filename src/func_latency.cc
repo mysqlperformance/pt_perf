@@ -29,6 +29,7 @@ Param param;
 
 #define CODE_BLOCK_PREFIX  "*code block: "
 #define TARGET_SELF "*self"
+using defer = std::shared_ptr<void>;
 
 Param::Param() {
   perf_tool = get_current_dir() + "/perf";
@@ -162,7 +163,8 @@ static void dump_options() {
 
 bool SrclineMap::get(const std::string &function, std::string &srcline) {
   srcline = "-";
-  shared_lock<shared_mutex> rlock(srcline_mutex);
+  m_lock.s_lock();
+  defer _(nullptr, [&](...) {m_lock.s_unlock();});
   auto it = srcline_map.find(function);
   if (it != srcline_map.end()) {
     srcline = it->second;
@@ -172,7 +174,8 @@ bool SrclineMap::get(const std::string &function, std::string &srcline) {
 }
 
 void SrclineMap::process_address() {
-  unique_lock<shared_mutex> wlock(srcline_mutex);
+  m_lock.x_lock();
+  defer _(nullptr, [&](...) {m_lock.x_unlock();});
   vector<string> func_vec;
   vector<uint64_t> addr_vec;
   vector<string> filename_vec;
@@ -193,7 +196,8 @@ void SrclineMap::process_address() {
 }
 
 uint64_t SrclineMap::get(const std::string &function) {
-  shared_lock<shared_mutex> rlock(srcline_mutex);
+  m_lock.s_lock();
+  defer _(nullptr, [&](...) {m_lock.s_unlock();});
   auto it = addr_map.find(function);
   if (it != addr_map.end()) {
     return it->second;
@@ -202,11 +206,10 @@ uint64_t SrclineMap::get(const std::string &function) {
 }
 
 void SrclineMap::put(const std::string &function, uint64_t addr) {
-  unique_lock<shared_mutex> wlock(srcline_mutex);
+  m_lock.x_lock();
+  defer _(nullptr, [&](...) {m_lock.x_unlock();});
   auto it = addr_map.find(function);
-  if (it != addr_map.end()) {
-    return;
-  } else {
+  if (it == addr_map.end()) {
     addr_map[function] = addr;
   }
 }
@@ -248,13 +251,7 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
           return {name, addr, offset};
         }
       }
-      stringstream ss;
-      ss << "|" << std::hex << func_addr << std::dec;
-      name += ss.str();
-    }
-    // only for user symbol
-    if(!srcline_map.get(name)) {
-      srcline_map.put(name, func_addr);
+      funcname_add_addr(name, func_addr);
     }
   }
   return {name, addr, offset};
@@ -453,16 +450,11 @@ void ThreadJob::do_analyze() {
           string child_name = stack.back().to.name;
           if (!action.from.equal(&stack.back().to)) {
             // target may calls inline function, but returns from another functions
+            child_name = action.from.name;
             if (param.call_line) {
               // 'from' function has not call address, we assign one
               uint64_t call_addr = stack.back().from.addr;
-              stringstream ss;
-              ss << action.from.name << "|" << std::hex << call_addr << std::dec;
-              child_name = ss.str();
-              // only for user symbol
-              if(!srcline_map.get(child_name)) srcline_map.put(child_name, call_addr);
-            } else {
-              child_name = action.from.name;
+              funcname_add_addr(child_name, call_addr);
             }
           }
           child.add_target(child_name, (action.ts - stack.back().ts));
@@ -727,9 +719,9 @@ void Stat::LatencyChild::print_summary() {
   Bucket oncpu("cpu_pct(%)");
   Bucket srcline(param.call_line ? "call_line" : "src_line");
   hist.init_key(target, [&](const std::string &name) -> std::string {
-    if (param.srcline && !param.verbose) {
+    if (param.srcline) {
       // print func_name without address
-      return name.substr(0, name.find_first_of('|'));
+      return funcname_get_name(name);
     }
     return name;
   });
@@ -797,13 +789,29 @@ static void print_latency(Stat::Latency &latency) {
   }
 }
 
+void Stat::generate_srcline() {
+  // put all callers
+  for (auto it = callers.begin(); it != callers.end(); ++it) {
+    std::string name = it->first;
+    uint64_t addr = funcname_get_addr(name);
+    if (addr > 0)
+      srcline_map.put(name, addr);
+  }
+  // put all children
+  children.target.loop_for_element([&](Bucket::Element &el){
+    uint64_t addr = funcname_get_addr(el.name);
+    if (addr > 0)
+      srcline_map.put(el.name, addr);
+  });
+  // generate srcline
+  srcline_map.process_address();
+}
+
 void Stat::print_summary() {
   char title[1024];
   string target_name = param.target;
   if (param.srcline) {
-    string srcline;
-    srcline_map.get(target_name, srcline);
-    target_name += ("(" + srcline + ")");
+    generate_srcline();
   }
   /* print target function's latency */
   print_cross_line('=');
@@ -832,9 +840,7 @@ void Stat::print_summary() {
     if (param.srcline) {
       string srcline;
       srcline_map.get(caller_name, srcline);
-      if (!param.verbose)
-        caller_name = caller_name.substr(0, caller_name.find_first_of('|'));
-      caller_name += ("(" + srcline + ")");
+      caller_name = funcname_get_name(caller_name) + "(" + srcline + ")";
     }
     /* target function's latency from current caller */
     print_cross_line('=');
@@ -993,10 +999,6 @@ static void analyze_funcs() {
         "[ ancestor: %s, call: %llu, return: %llu ]", param.ancestor.c_str(),
         ancestor_begin_count.load(), ancestor_end_count.load());
     print_title(title);
-  }
-
-  if (param.srcline) {
-    srcline_map.process_address();
   }
 
   /* print summary */
