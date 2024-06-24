@@ -5,6 +5,8 @@
 #include <vector>
 #include <unordered_map>
 
+#define INTEGER_TEN_ZEROS 10000000000UL
+
 class HistogramBucket;
 class Bucket {
 public:
@@ -30,8 +32,14 @@ public:
         printf(" %-*s", width, val_str.substr(0, width).c_str());
       else if (scale)
         printf(" %-10.2f", get_avg() / scale);
-      else
-        printf(" %-10d", get_avg());
+      else {
+        uint64_t avg = get_avg();
+        if (avg >= INTEGER_TEN_ZEROS) {
+          printf(" %-7uE10", avg / INTEGER_TEN_ZEROS);
+        } else {
+          printf(" %-10lu", avg);
+        }
+      }
     }
   };
 
@@ -113,7 +121,7 @@ private:
 
 class HistogramBucket {
 public:
-  HistogramBucket() : total_max(0) {}
+  HistogramBucket() : total_max(0), max_key_length(10) {}
 
   template <typename Function>
   void init_key(Bucket &b, Function f) {
@@ -124,18 +132,22 @@ public:
       }
       el.name = it->first;
       el.val_str = f(el.name);
+      if (el.val_str.size() > max_key_length)
+        max_key_length = el.val_str.size();
       keys.push_back(el);
     }
+    if (max_key_length > 100) max_key_length = 100;
     std::sort(keys.begin(), keys.end());
   }
   void add_extra_bucket(Bucket *b) {
     extra_buckets.emplace_back(b);
   }
-  static uint32_t get_print_width(uint32_t extra_num);
+  uint32_t get_print_width(uint32_t extra_num);
   void print();
 private:
   std::vector<Bucket::Element> keys;
   uint64_t total_max;
+  size_t max_key_length;
   std::vector<Bucket *> extra_buckets;
 };
 

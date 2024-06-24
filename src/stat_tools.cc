@@ -30,7 +30,8 @@ static void print_stars(uint64_t val, uint64_t val_max, int width)
 
 uint32_t HistogramBucket::get_print_width(uint32_t bucket_num) {
   uint32_t print_width = 0;
-  print_width += 63;
+  print_width += max_key_length;
+  print_width += 23;
   print_width += (22 * (bucket_num - 1));
   print_width += 22;
   return print_width;
@@ -41,7 +42,9 @@ void HistogramBucket::print() {
     return;
   }
 
-  printf("%*s%-*s : %-*s %-*s", 20, "", 20, "name",
+  max_key_length = (max_key_length + 1) / 2 * 2;
+  printf("%*s%-*s : %-*s %-*s", max_key_length / 2,
+          "", max_key_length / 2, "name",
          10, "avg", 10, "cnt");
   for (Bucket *bucket : extra_buckets) {
     bucket->print_val_name();
@@ -51,8 +54,16 @@ void HistogramBucket::print() {
   for (auto it = keys.begin(); it != keys.end(); ++it) {
     Bucket::Element &el = *it;
     const string &name = el.name;
-    printf("%-*s : %-10d %-10d", 40, el.val_str.substr(0, 40).c_str(),
-            el.get_avg(), el.count);
+    uint64_t avg = el.get_avg();
+    string print_flag;
+    if (avg >= INTEGER_TEN_ZEROS) {
+      print_flag = "%-*s : %-10lu %-7uE10";
+    } else {
+      print_flag = "%-*s : %-10lu %-10lu";
+    }
+    printf(print_flag.c_str(), max_key_length,
+            el.val_str.substr(0, max_key_length).c_str(),
+            avg, el.count);
     for (Bucket *bucket : extra_buckets) {
       if (bucket->slots.count(name)) {
         Bucket::Element &extra = bucket->slots[name];

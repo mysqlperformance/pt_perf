@@ -2720,6 +2720,15 @@ static int process_text_poke_events(struct perf_tool *tool,
 static void sig_handler(int sig __maybe_unused)
 {
 	session_done = 1;
+	if (parallel_child_pid != 0) {
+		for (int k=0; k<parallel_file_count; k++) {
+			// signal all child workers to stop
+			if (worker_pids[k] != 0)
+				kill(worker_pids[k], SIGINT);
+		}
+	} else {
+		exit(-1);
+	}
 }
 
 static void perf_script__fclose_per_event_dump(struct perf_script *script)

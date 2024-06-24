@@ -53,6 +53,10 @@ private:
   std::mutex m_writer; // mutex for synchronization; held by X lock holders
 };
 
+void exec_cmd_killable(const std::string &cmd);
+void abort_cmd_killable(int sig);
+
+std::pair<uint64_t, uint64_t> get_interval_from_string(const std::string &str);
 size_t get_file_linecount(const std::string &path);
 bool check_system();
 bool check_pt_flame(const std::string &pt_flame_home);

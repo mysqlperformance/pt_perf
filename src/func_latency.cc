@@ -7,6 +7,7 @@
 #include <getopt.h>
 #include <cmath>
 #include <sstream>
+#include <signal.h>
 
 #include "graphs.h"
 #include "stat_tools.h"
@@ -51,6 +52,7 @@ Param::Param() {
   call_line = true;
 
   ancestor = "";
+  ancestor_latency = {0, UINT64_MAX};
   code_block = false;
 
   timeline = false;
@@ -119,7 +121,9 @@ static void usage() {
     "\t-i / --ip_filter       --- use ip_filter when tracing function\n"
     "\t-I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default\n"
     "\t-P / --perf            --- perf tool path, 'perf' by default\n"
-    "\t-a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain\n"
+    "\t-a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain,\n"
+    "\t                           eg, 'test:100,200', we shows the result of target function\n"
+    "\t                           where its ancestor latency is between 100ns and 200 ns.\n"
     "\t-c / --code_block      --- show the code block latency of target function\n"
     "\t     --srcline         --- instead of the call line, show the define line of functions\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
@@ -148,6 +152,13 @@ static void clear_record_files() {
 
 static void clear_script_files() {
   system("rm -f script_out*");
+}
+static void sig_handler(int sig) {
+  abort_cmd_killable(sig);
+  if (param.history < 2)
+    clear_record_files();
+  clear_script_files();
+  exit(1);
 }
 static void dump_options() {
   printf("binary file path: %s\n", param.binary.c_str());
@@ -234,7 +245,7 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
   name = str.substr(start, end - start);
 
   // offset
-  start = str.find_first_of('+');
+  start = str.find_last_of('+');
   end = str.find_first_of(' ', start);
   if (end == string::npos) end = str.size() - 1;
   offset = stol(str.substr(start + 1, end-start+1), nullptr, 16);
@@ -283,6 +294,7 @@ void ThreadJob::do_analyze() {
 
   Action *cursor = nullptr;
 
+  /* clear execution chain */
   auto clear_context = [&]() {
     stack.clear();
     child.clear();
@@ -291,6 +303,21 @@ void ThreadJob::do_analyze() {
     ancestor_begin = nullptr;
   };
 
+  /* add one child function latency */
+  auto add_one_child = [&](Action *a1, Action *a2, bool unknown = false) {
+    std::string &child_name = a1->to.name;
+    uint64_t lat_t = a2->ts - a1->ts;
+    uint64_t lat_s = sched_in_child;
+    if (unknown) {
+      child_name = "(unknown latency) " + child_name;
+      lat_t = lat_s = 0;
+    }
+    child.add_target(child_name, lat_t);
+    child.add_sched(child_name, lat_s);
+    sched_in_child = 0;
+  };
+
+  /* add code block latency */
   auto add_code_block = [&](Action *a1, Action *a2) {
     if (a2->from.offset == a1->to.offset) return;
     std::string child_name = CODE_BLOCK_PREFIX + to_string(a1->to.offset) + "-"
@@ -325,6 +352,25 @@ void ThreadJob::do_analyze() {
         clear_context();
         ancestor_begin = &action;
         ancestor_begin_count.fetch_add(1);
+        if (param.ancestor_latency.first != 0 ||
+            param.ancestor_latency.second != UINT64_MAX) {
+          // find the ancestor end in follow actions
+          Action *ancestor_end = nullptr;
+          for (size_t j = i; j < actions.size(); ++j) {
+            if (actions[j].ancestor_end) {
+              ancestor_end = &actions[j];
+              break;
+            }
+          }
+          if (ancestor_end) {
+            uint64_t al = ancestor_end->ts - ancestor_begin->ts;
+            if (al < param.ancestor_latency.first ||
+                al > param.ancestor_latency.second) {
+              // discard if not within ancestor latency
+              ancestor_begin = nullptr;
+            }
+          }
+        }
         continue;
       } else if (action.ancestor_end) {
         ancestor_begin = nullptr;
@@ -337,16 +383,19 @@ void ThreadJob::do_analyze() {
     }
 
     if (action.to.offset == 0 && action.to_target) {
-        /* this action is the start point for target function, 
-         * clear stack to avoid there exists incompleted traces */
-       stack.clear();
-       stack.push_back(action);
+        /* this action is the start point for target function */
+       if (target_begin && stack.size() == 2) {
+         // add stat of no-return child
+         add_one_child(&stack.back(), &action, true);
+       }
        if (!child.empty()) {
           /* there are not return action in last execution chain,
            * we just add the child latency information */
           stat.add_child_latency(child, "unknown");
           child.clear();
        }
+       stack.clear();
+       stack.push_back(action);
        sched_in_target = sched_in_child = 0;
        if (sched_begin) {
          /* ERROR: the schedule is not finished when the target is called */
@@ -406,9 +455,7 @@ void ThreadJob::do_analyze() {
           (stack.back().type == Action::TR_END_HW_INT ||
           stack.back().type == Action::TR_END_CALL)) {
           // this is return to target function from sub function
-          string &child_name = stack.back().to.name;
-          child.add_target(child_name, (action.ts - stack.back().ts));
-          child.add_sched(child_name, sched_in_child);
+          add_one_child(&stack.back(), &action);
           stack.pop_back();
         } else if (!stack.empty() && stack.back().type == Action::TR_END) {
           stack.pop_back();
@@ -422,6 +469,7 @@ void ThreadJob::do_analyze() {
       case Action::HW_INT:
       case Action::TR_END_HW_INT:
       case Action::CALL:
+      case Action::TR_END_SYSCALL:
       case Action::TR_END_CALL:
         // this is call to sub function
         if (param.code_block) add_code_block(cursor, &action);
@@ -447,19 +495,7 @@ void ThreadJob::do_analyze() {
           stack.clear();
         } else if (stack.size() == 2 && action.type != Action::TR_END_RETURN) {
           // return to target function from sub function
-          string child_name = stack.back().to.name;
-          if (!action.from.equal(&stack.back().to)) {
-            // target may calls inline function, but returns from another functions
-            child_name = action.from.name;
-            if (param.call_line) {
-              // 'from' function has not call address, we assign one
-              uint64_t call_addr = stack.back().from.addr;
-              funcname_add_addr(child_name, call_addr);
-            }
-          }
-          child.add_target(child_name, (action.ts - stack.back().ts));
-          child.add_sched(child_name, sched_in_child);
-          sched_in_child = 0;
+          add_one_child(&stack.back(), &action);
           stack.pop_back();
         } else {
           // wrong chain, discard it
@@ -521,8 +557,8 @@ void ThreadJob::extract_actions() {
 
 static std::vector<std::string> action_type_strs = {
   "tr strt", "tr end  call", "tr end  return", "tr end  hw int",
-  "tr end", "call", "return", "syscall", "jmp", "jcc", "hw int",
-  "iret"
+  "tr end  syscall", "tr end", "call", "return", "syscall",
+  "jmp", "jcc", "hw int", "iret"
 };
 
 void ParseJob::decode_to_actions() {
@@ -660,15 +696,24 @@ void ParseJob::decode_to_actions() {
   }
 }
 
-static void print_cross_line(char c) {
-  uint32_t max_width = 80, num = 1;
+static uint32_t global_print_width = 100;
+static void init_print_width(Stat &stat) {
+  uint32_t num = 1;
   if (param.offcpu) num += 1;
   if (param.srcline) num += 1;
   if (param.code_block) num += 1;
-  max_width = std::max(HistogramDist::get_print_width(num), max_width);
-  max_width = std::max(HistogramBucket::get_print_width(num), max_width);
+  HistogramBucket hist_b;
+  hist_b.init_key(stat.children.target, [&](const std::string &name) -> std::string {
+    if (param.srcline) { return funcname_get_name(name);}
+    return name;
+  });
+  global_print_width = std::max(HistogramDist::get_print_width(num), global_print_width);
+  global_print_width = std::max(hist_b.get_print_width(num), global_print_width);
+}
+
+static void print_cross_line(char c) {
   printf("\n\033[33m");
-  for (int i = 0; i < max_width; ++i) printf("%c", c);
+  for (int i = 0; i < global_print_width; ++i) printf("%c", c);
   printf("\033[0m\n");
 }
 
@@ -898,6 +943,7 @@ static void print_stat(unordered_map<long, ThreadJob *> &thread_jobs) {
       ThreadJob *thread = it->second;
       global_stat.merge(thread->get_stat());
     }
+    init_print_width(global_stat);
     global_stat.print_summary();
   }
   auto t2 = ut_time_now();
@@ -1160,7 +1206,7 @@ static void perf_script() {
   }
   if (param.verbose) printf("%s\n", perf_cmd.str().c_str());
   auto t1 = ut_time_now();
-  system(perf_cmd.str().c_str());
+  exec_cmd_killable(perf_cmd.str());
   auto t2 = ut_time_now();
   printf("[ perf script has consumed %.2f seconds ]\n",
           ut_time_diff(t2, t1));
@@ -1219,6 +1265,8 @@ int main(int argc, char *argv[]) {
   }
   
   if (check_system()) exit(-1);
+
+  signal(SIGINT, sig_handler);
   
   int c;
   while (-1 != (c = getopt_long(argc, argv, opt_str, opts, NULL))) {
@@ -1255,13 +1303,7 @@ int main(int argc, char *argv[]) {
         break;
       case '0': {
         string str = string(optarg);
-        int sep = str.find_first_of(',');
-        if (sep == string::npos) {
-          printf("ERROR: wrong latency_interval format!\n");
-          exit(0);
-        }
-        param.latency_interval.first = stol(str.substr(0, sep));
-        param.latency_interval.second = stol(str.substr(sep + 1, str.size()));
+        param.latency_interval = get_interval_from_string(str);
         break;}
       case '1': {
         string str = string(optarg);
@@ -1290,9 +1332,17 @@ int main(int argc, char *argv[]) {
       case 'c':
         param.code_block = true;
         break;
-      case 'a':
-        param.ancestor = string(optarg);
-        break;
+      case 'a': {
+        string str = string(optarg);
+        int sep = str.find_first_of(':');
+        if (sep != string::npos) {
+          param.ancestor = str.substr(0, sep);
+          param.ancestor_latency =
+            get_interval_from_string(str.substr(sep + 1, str.size() - sep));
+        } else {
+          param.ancestor = str;
+        }
+        break;}
       case '2':
         param.history = atol(optarg);
         break;
@@ -1335,6 +1385,10 @@ int main(int argc, char *argv[]) {
   if (param.trace_time <= 0) {
     printf("Error: trace_time must be greater than 0\n ");
     exit(0);
+  }
+
+  if (param.ancestor == param.target) {
+    param.ancestor = "";
   }
 
   if (param.offcpu && getuid() != 0) {

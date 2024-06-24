@@ -5,9 +5,25 @@
 #include <fstream>
 #include <libgen.h>
 #include <vector>
+#include <sys/wait.h>
 
 #include "sys_tools.h"
 
+// current executing pid which do the command, and we wait it
+static pid_t current_cmd_pid = 0;
+
+std::pair<uint64_t, uint64_t> get_interval_from_string(const std::string &str) {
+  std::pair<uint64_t, uint64_t> res;
+  int sep = str.find_first_of(',');
+  if (sep == std::string::npos) {
+    printf("ERROR: wrong latency interval format!\n");
+    exit(0);
+    return {0, UINT64_MAX};
+  }
+  res.first = stol(str.substr(0, sep));
+  res.second = stol(str.substr(sep + 1, str.size()));
+  return res;
+}
 size_t get_file_linecount(const std::string &path) {
   size_t total = 0;
   std::ifstream ifs(path);
@@ -48,6 +64,23 @@ bool check_pt_flame(const std::string &pt_flame_home) {
   return 0;
 }
 
+void exec_cmd_killable(const std::string &cmd) {
+  current_cmd_pid = fork();
+  if (current_cmd_pid == 0) {
+    execl("/bin/sh", "sh", "-c", cmd.c_str(), NULL);
+    exit(0);
+  } else {
+    waitpid(current_cmd_pid, NULL, 0);
+  }
+  current_cmd_pid = 0;
+}
+
+void abort_cmd_killable(int sig) {
+  if (current_cmd_pid != 0) {
+    kill(current_cmd_pid, sig);
+    current_cmd_pid = 0;
+  }
+}
 /*
  *  get current directory
  * */

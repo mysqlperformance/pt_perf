@@ -31,6 +31,7 @@ struct Param {
   bool call_line;
 
   std::string ancestor;
+  std::pair<uint64_t, uint64_t> ancestor_latency;
 
   bool code_block;
 
@@ -67,6 +68,7 @@ struct Action {
     TR_END_CALL,
     TR_END_RETURN,
     TR_END_HW_INT,
+    TR_END_SYSCALL,
     TR_END,
     CALL,
     RETURN,
