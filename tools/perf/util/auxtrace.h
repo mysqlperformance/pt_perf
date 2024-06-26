@@ -574,10 +574,12 @@ struct auxtrace_cache_entry {
 };
 
 struct parallel_cache_entry {
-  struct auxtrace_cache_entry entry;
-  int batch_add;
-  int buffer_add;
-  int last_psb_add;
+	struct auxtrace_cache_entry entry;
+	int batch_add;
+	int buffer_add;
+	int last_psb_add;
+	int buffer_lookahead;
+	int last_psb_lookahead;
 };
 extern struct parallel_cache_entry cpu_batch_events[];
 extern struct auxtrace_cache *thread_batch_events;

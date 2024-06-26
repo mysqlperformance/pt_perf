@@ -209,6 +209,17 @@ static int intel_pt_log_open(void)
 	return 0;
 }
 
+void intel_pt_log_reset(void)
+{
+	if (!intel_pt_enable_logging)
+		return;
+
+	if (f) {
+		fclose(f);
+		f = NULL;
+	}
+}
+
 void __intel_pt_log_packet(const struct intel_pt_pkt *packet, int pkt_len,
 			   uint64_t pos, const unsigned char *buf)
 {

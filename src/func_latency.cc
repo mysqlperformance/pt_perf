@@ -1165,17 +1165,18 @@ static void perf_script() {
     // thread filter
     if (param.tid != "")
       script_filter << " --tid=" << param.tid;
-    // time filter
-    if (param.time_interval.first != 0
-        || param.time_interval.second != UINT64_MAX) {
-      char time_filter[1024];
-      snprintf(time_filter, 1024, " --time=%d.%09d,%d.%09d",
-               param.time_interval.first / NSECS_PER_SECS,
-               param.time_interval.first % NSECS_PER_SECS,
-               param.time_interval.second / NSECS_PER_SECS,
-               param.time_interval.second % NSECS_PER_SECS);
-      script_filter << " --time=" << time_filter;
-    }
+  }
+
+  // time filter
+  if (param.time_interval.first != 0
+      || param.time_interval.second != UINT64_MAX) {
+    char time_filter[1024];
+    snprintf(time_filter, 1024, " --time=%d.%09d,%d.%09d",
+             param.time_interval.first / NSECS_PER_SECS,
+             param.time_interval.first % NSECS_PER_SECS,
+             param.time_interval.second / NSECS_PER_SECS,
+             param.time_interval.second % NSECS_PER_SECS);
+    script_filter << time_filter;
   }
 
   /* use dl filter to discard internal jump of target function, if not analyze code block latency */
@@ -1389,6 +1390,10 @@ int main(int argc, char *argv[]) {
 
   if (param.ancestor == param.target) {
     param.ancestor = "";
+    param.latency_interval.first =
+      std::max(param.latency_interval.first, param.ancestor_latency.first);
+    param.latency_interval.second =
+      std::min(param.latency_interval.second, param.ancestor_latency.second);
   }
 
   if (param.offcpu && getuid() != 0) {

@@ -558,6 +558,8 @@ int auxtrace_queues__add_event(struct auxtrace_queues *queues,
 					e->batch_add = 0;
 					e->buffer_add = 0;
 					e->last_psb_add = 0;
+					e->buffer_lookahead = 0;
+					e->last_psb_lookahead = 0;
 					auxtrace_cache__add(thread_batch_events, event->auxtrace.tid, &e->entry);
 				}
 				e->batch_add++;

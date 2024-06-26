@@ -486,25 +486,25 @@ static int intel_pt_lookahead(void *data, intel_pt_lookahead_cb_t cb,
 				e = auxtrace_cache__lookup(thread_batch_events, current_decode_tid);
 			}
 			if (!e || !e->batch_add) {
+				// not lookahead
 				b.len = 0;
 			} else {
-				if (e->buffer_add < e->batch_add) {
-				} else if (e->last_psb_add == 0) {
+				if (e->buffer_lookahead < e->batch_add) {
+				} else if (e->last_psb_lookahead == 0) {
 					first_psb = memmem(b.buf, b.len, INTEL_PT_PSB_STR,
 							   INTEL_PT_PSB_LEN);
 					if (first_psb != NULL) {
 						// parse last psb in the first psb of no-batch event
 						b.len = first_psb - b.buf;
-						e->last_psb_add++;
-						cpu_thread_last_psb_add++;
+						e->last_psb_lookahead++;
 					} else {
 						// add event with buffer smaller than psb size
 					}
 				} else {
-					// no add to buffer
+					// no lookahead
 					b.len = 0;
 				}
-				e->buffer_add++;
+				e->buffer_lookahead++;
 			}
 		}
 		if (b.len) {
@@ -581,6 +581,7 @@ static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 					// parse last psb in the first psb of no-batch event
 					b->len = first_psb - b->buf;
 					e->last_psb_add++;
+					e->last_psb_lookahead++;
 					cpu_thread_last_psb_add++;
 				} else {
 					// add event with buffer smaller than psb size
@@ -590,6 +591,11 @@ static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 				b->len = 0;
 			}
 			e->buffer_add++;
+			if (e->buffer_add > e->buffer_lookahead) {
+				// advance lookahead count, because we will
+				// not lookahead the buffer we have added
+				e->buffer_lookahead = e->buffer_add;
+			}
 		}
 	}
 
@@ -4647,6 +4653,13 @@ int intel_pt_process_auxtrace_info(union perf_event *event,
 		err = auxtrace_queues__process_index(&pt->queues, session);
 	if (err)
 		goto err_delete_thread;
+	if (!parallel_child_pid) {
+		// redirect the pt debug log file for each child
+		char parallel_log_name[1024];
+		snprintf(parallel_log_name, 1024, "intel_pt_%d", parallel_file_count);
+		intel_pt_log_set_name(parallel_log_name);
+		intel_pt_log_reset();
+	}
 
 	if (pt->queues.populated)
 		pt->data_queued = true;
