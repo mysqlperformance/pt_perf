@@ -61,9 +61,24 @@ void HistogramBucket::print() {
     } else {
       print_flag = "%-*s : %-10lu %-10lu";
     }
-    printf(print_flag.c_str(), max_key_length,
-            el.val_str.substr(0, max_key_length).c_str(),
-            avg, el.count);
+    if (el.val_str.size() > max_key_length) {
+      // name is too long
+      string part;
+      el.val_str = "[[" + el.val_str + "]]";
+      int i, val_len = el.val_str.size();
+      for (i = val_len; i > max_key_length; i -= max_key_length) {
+        part = el.val_str.substr(val_len - i, max_key_length);
+        printf("%s\n", part.c_str());
+      }
+      part =
+        el.val_str.substr(val_len - i, max_key_length);
+      printf(print_flag.c_str(), max_key_length,
+              part.c_str(), avg, el.count);
+    } else {
+      printf(print_flag.c_str(), max_key_length,
+              el.val_str.substr(0, max_key_length).c_str(),
+              avg, el.count);
+    }
     for (Bucket *bucket : extra_buckets) {
       if (bucket->slots.count(name)) {
         Bucket::Element &extra = bucket->slots[name];

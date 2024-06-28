@@ -122,7 +122,7 @@ static void usage() {
     "\t-I / --func_idx        --- for ip_filter, choose function index if there exists multiple one, '#0' by default\n"
     "\t-P / --perf            --- perf tool path, 'perf' by default\n"
     "\t-a / --ancestor        --- only analyze target function with 'ancestor' function in its call chain,\n"
-    "\t                           eg, 'test:100,200', we shows the result of target function\n"
+    "\t                           eg, 'test#100,200', we shows the result of target function\n"
     "\t                           where its ancestor latency is between 100ns and 200 ns.\n"
     "\t-c / --code_block      --- show the code block latency of target function\n"
     "\t     --srcline         --- instead of the call line, show the define line of functions\n"
@@ -1285,7 +1285,7 @@ int main(int argc, char *argv[]) {
         param.pid = atol(optarg);
         break;
       case 'T':
-        param.tid = string(optarg);
+        param.tid = parse_number_range_to_sequence(string(optarg));
         break;
       case 'C':
         param.cpu = string(optarg);
@@ -1314,11 +1314,11 @@ int main(int argc, char *argv[]) {
           printf("ERROR: wrong time_interval format!\n");
           exit(0);
         }
-        param.time_start = stol(str.substr(0, sep1));
+        param.time_start = str2long(str.substr(0, sep1));
         param.time_interval.first =
-                        param.time_start + stol(str.substr(sep1 + 1, sep2));
+                        param.time_start + str2long(str.substr(sep1 + 1, sep2));
         param.time_interval.second =
-                        param.time_start + stol(str.substr(sep2 + 1, str.size()));
+                        param.time_start + str2long(str.substr(sep2 + 1, str.size()));
         param.time_start = param.time_interval.first;
         break;}
       case '3':
@@ -1335,7 +1335,7 @@ int main(int argc, char *argv[]) {
         break;
       case 'a': {
         string str = string(optarg);
-        int sep = str.find_first_of(':');
+        int sep = str.find_first_of('#');
         if (sep != string::npos) {
           param.ancestor = str.substr(0, sep);
           param.ancestor_latency =

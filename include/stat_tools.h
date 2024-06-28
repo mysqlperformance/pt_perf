@@ -136,7 +136,7 @@ public:
         max_key_length = el.val_str.size();
       keys.push_back(el);
     }
-    if (max_key_length > 100) max_key_length = 100;
+    if (max_key_length > 45) max_key_length = 45;
     std::sort(keys.begin(), keys.end());
   }
   void add_extra_bucket(Bucket *b) {

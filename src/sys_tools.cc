@@ -6,11 +6,34 @@
 #include <libgen.h>
 #include <vector>
 #include <sys/wait.h>
+#include <stdexcept>
 
 #include "sys_tools.h"
 
-// current executing pid which do the command, and we wait it
+// current executing pid which do bash command, and we wait it
 static pid_t current_cmd_pid = 0;
+
+long str2long(const std::string &str) {
+  long res;
+  try {
+    res = std::stol(str);
+  } catch (const std::exception& e) {
+    printf("ERROR: wrong integer format, please check your argument!\n");
+    exit(0);
+  }
+  return res;
+}
+
+int str2int(const std::string &str) {
+  int res;
+  try {
+    res = std::stoi(str);
+  } catch (const std::exception& e) {
+    printf("ERROR: wrong integer format, please check your argument!\n");
+    exit(0);
+  }
+  return res;
+}
 
 std::pair<uint64_t, uint64_t> get_interval_from_string(const std::string &str) {
   std::pair<uint64_t, uint64_t> res;
@@ -20,8 +43,8 @@ std::pair<uint64_t, uint64_t> get_interval_from_string(const std::string &str) {
     exit(0);
     return {0, UINT64_MAX};
   }
-  res.first = stol(str.substr(0, sep));
-  res.second = stol(str.substr(sep + 1, str.size()));
+  res.first = str2long(str.substr(0, sep));
+  res.second = str2long(str.substr(sep + 1, str.size()));
   return res;
 }
 size_t get_file_linecount(const std::string &path) {
@@ -32,6 +55,28 @@ size_t get_file_linecount(const std::string &path) {
     while (getline(ifs, line)) ++total;
   }
   return total;
+}
+
+std::string parse_number_range_to_sequence(const std::string &str) {
+  std::stringstream ss(str);
+  std::string range;
+  std::string res = "";
+  while (getline(ss, range, ',')) {
+    int sep = range.find_first_of('-');
+    if (sep == std::string::npos) {
+      res += (std::string(range) + ",");
+    } else {
+      int b = str2int(range.substr(0, sep));
+      int e = str2int(range.substr(sep + 1, range.size()));
+      for (int i = b; i <= e; i++) {
+        res += (std::to_string(i) + ",");
+      }
+    }
+  }
+  if (res != "") {
+    res.pop_back();
+  }
+  return res;
 }
 
 bool check_system() {
