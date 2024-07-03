@@ -7,6 +7,8 @@ Summary: Intel processor trace tools for analyzing performance of function.
 Group: alibaba/application
 License: Commercial
 AutoReqProv: none
+Requires: binutils >= 2.30
+Requires: slang >= 2.2.4
 BuildRequires: binutils = 2.27
 BuildRequires: binutils-devel = 2.27
 BuildRequires: elfutils-libelf-devel

@@ -42,7 +42,7 @@ void HistogramBucket::print() {
     return;
   }
 
-  max_key_length = (max_key_length + 1) / 2 * 2;
+  max_key_length = (max_key_length + 1) / 2 * 2 + 2;
   printf("%*s%-*s : %-*s %-*s", max_key_length / 2,
           "", max_key_length / 2, "name",
          10, "avg", 10, "cnt");
@@ -55,30 +55,33 @@ void HistogramBucket::print() {
     Bucket::Element &el = *it;
     const string &name = el.name;
     uint64_t avg = el.get_avg();
-    string print_flag;
-    if (avg >= INTEGER_TEN_ZEROS) {
-      print_flag = "%-*s : %-10lu %-7uE10";
-    } else {
-      print_flag = "%-*s : %-10lu %-10lu";
-    }
-    if (el.val_str.size() > max_key_length) {
+    /* 1. print name */
+    el.val_str = "| " + el.val_str;
+    int val_len = el.val_str.size();
+    if (val_len > max_key_length) {
       // name is too long
       string part;
-      el.val_str = "[[" + el.val_str + "]]";
-      int i, val_len = el.val_str.size();
-      for (i = val_len; i > max_key_length; i -= max_key_length) {
-        part = el.val_str.substr(val_len - i, max_key_length);
+      part = el.val_str.substr(0, max_key_length);
+      printf("%s\n", part.c_str());
+
+      int width = max_key_length - 4;
+      int i = val_len - max_key_length;
+      for (; i > width; i -= width) {
+        part = "    " + el.val_str.substr(val_len - i, width);
         printf("%s\n", part.c_str());
       }
       part =
-        el.val_str.substr(val_len - i, max_key_length);
-      printf(print_flag.c_str(), max_key_length,
-              part.c_str(), avg, el.count);
+        el.val_str.substr(val_len - i, width);
+      printf("    %-*s : ", width, part.c_str());
     } else {
-      printf(print_flag.c_str(), max_key_length,
-              el.val_str.substr(0, max_key_length).c_str(),
-              avg, el.count);
+      printf("%-*s : ", max_key_length,
+          el.val_str.substr(0, max_key_length).c_str());
     }
+    /* 2. print avg and cnt */
+    string print_flag = (avg >= INTEGER_TEN_ZEROS) ?
+                      "%-10lu %-7uE10" : "%-10lu %-10lu";
+    printf(print_flag.c_str(), avg, el.count);
+    /* 3. print each bucket */
     for (Bucket *bucket : extra_buckets) {
       if (bucket->slots.count(name)) {
         Bucket::Element &extra = bucket->slots[name];
@@ -88,6 +91,7 @@ void HistogramBucket::print() {
       }
     }
     printf("|");
+    /* 4. print distribution */
     print_stars(el.total, total_max, 20);
     printf("|\n");
   }

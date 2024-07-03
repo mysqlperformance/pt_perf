@@ -346,10 +346,47 @@ void ThreadJob::do_analyze() {
       continue;
     }
 
+    if (action.to.offset == 0 && action.to_target) {
+       /* new target function is called, add child function
+        * of previous round */
+       if (target_begin && stack.size() == 2) {
+         // add stat of no-return child
+         add_one_child(&stack.back(), &action, true);
+       }
+       if (!child.empty()) {
+          /* there are not return action in last execution chain,
+           * we just add the child latency information */
+          stat.add_child_latency(child, "unknown");
+          child.clear();
+       }
+       /* this action is the start point for target function,
+        * clear context in previous round. */
+       stack.clear();
+       stack.push_back(action);
+       sched_in_target = sched_in_child = 0;
+       if (sched_begin) {
+         /* ERROR: the schedule in previous round is not finished
+          * when the new target is called */
+         report_error_action("schedule begin", sched_begin->id, sched_begin->lnum);
+         sched_begin = nullptr;
+       }
+       if (prev_target_error) {
+         /* if error occurs in previous round,
+          * calculate the trace missing time */
+         if (target_begin)
+           miss_trace_time.fetch_add(action.ts - target_begin->ts);
+         prev_target_error = false;
+       }
+       target_begin = &action;
+       cursor = &action;
+       continue;
+    }
+
     if (check_ancestor) {
+      /* filter actions by ancestor function */
       if (action.ancestor_begin) {
-        // mark that ancestor has began
-        clear_context();
+        // ancestor begin now
+        // clear_context();
         ancestor_begin = &action;
         ancestor_begin_count.fetch_add(1);
         if (param.ancestor_latency.first != 0 ||
@@ -369,70 +406,48 @@ void ThreadJob::do_analyze() {
               // discard if not within ancestor latency
               ancestor_begin = nullptr;
             }
+          } else {
+            // incomplete ancestor calls
+            ancestor_begin = nullptr;
           }
         }
         continue;
       } else if (action.ancestor_end) {
+        /* ancestor is end */
         ancestor_begin = nullptr;
         ancestor_end_count.fetch_add(1);
         continue;
       } else if (!ancestor_begin) {
-        // we only add target function within the ancestor
+        /* we only add target function within the ancestor,
+         * other targets is discard. */
         continue;
       }
     }
 
-    if (action.to.offset == 0 && action.to_target) {
-        /* this action is the start point for target function */
-       if (target_begin && stack.size() == 2) {
-         // add stat of no-return child
-         add_one_child(&stack.back(), &action, true);
-       }
-       if (!child.empty()) {
-          /* there are not return action in last execution chain,
-           * we just add the child latency information */
-          stat.add_child_latency(child, "unknown");
-          child.clear();
-       }
-       stack.clear();
-       stack.push_back(action);
-       sched_in_target = sched_in_child = 0;
-       if (sched_begin) {
-         /* ERROR: the schedule is not finished when the target is called */
-         report_error_action("schedule begin", sched_begin->id, sched_begin->lnum);
-         sched_begin = nullptr;
-       }
-       if (prev_target_error) {
-         /* calculate the trace missing time */
-         if (target_begin)
-           miss_trace_time.fetch_add(action.ts - target_begin->ts);
-         prev_target_error = false;
-       }
-       target_begin = &action;
-       cursor = &action;
-       continue;
-    }
-
     if (action.sched_begin) {
+      /* thread is schedule-out */
       sched_begin = &action;
       continue;
     }
 
     if (action.sched_end) {
+      /* thread is schedule-in */
       if (sched_begin) {
+        /* caculate the schedule time */
         uint32_t sched_time = action.ts - sched_begin->ts;
         sched_in_target += sched_time;
         sched_in_child += sched_time;
         ++stat.sched_count;
         sched_begin = nullptr;
       } else {
-        /* ERROR: the schedule has not started */
+        /* ERROR: the schedule has not started, but sched_end occurs. */
         report_error_action("schedule end", action.id, action.lnum);
       }
       continue;
     }
 
     if ((action.type == Action::JMP || action.type == Action::JCC)) {
+      /* change jmp/jcc instruction to call/return */
       if (action.from_target && action.to_target) {
         // internal jump, just add code block latency
         assert(param.code_block);
@@ -448,9 +463,10 @@ void ThreadJob::do_analyze() {
       }
     }
 
-    // process one execution chain
+    /* process one execution chain */
     switch (action.type) {
       case Action::TR_START:
+        /* for ipfiltering, usually means return from child. */
         if (!stack.empty() &&
           (stack.back().type == Action::TR_END_HW_INT ||
           stack.back().type == Action::TR_END_CALL)) {
@@ -471,7 +487,7 @@ void ThreadJob::do_analyze() {
       case Action::CALL:
       case Action::TR_END_SYSCALL:
       case Action::TR_END_CALL:
-        // this is call to sub function
+        /* this is call to child function */
         if (param.code_block) add_code_block(cursor, &action);
         stack.push_back(action);
         if (sched_begin) {
@@ -487,6 +503,7 @@ void ThreadJob::do_analyze() {
       case Action::IRET:
       case Action::RETURN:
       case Action::TR_END_RETURN:
+        /* return from target function */
         if (stack.size() == 1 && action.from_target && stack[0].to_target) {
           // the execution chain is done
           stat.add(stack[0], action, sched_in_target, child);
@@ -494,7 +511,7 @@ void ThreadJob::do_analyze() {
           sched_in_target = 0;
           stack.clear();
         } else if (stack.size() == 2 && action.type != Action::TR_END_RETURN) {
-          // return to target function from sub function
+          /* for non-ipfiltering, return to target function from child function */
           add_one_child(&stack.back(), &action);
           stack.pop_back();
         } else {

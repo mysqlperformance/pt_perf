@@ -83,14 +83,14 @@ bool check_system() {
   // first check if intel pt is supported
   FILE *file = fopen(PT_HOME_PATH, "r");
   if (file == nullptr) {
-    printf("ERROR: intel pt is not support by your cpu architecture\n");
+    printf("ERROR: intel pt is not supported by your cpu architecture, check your cpu model and linux version (>= 4.x).\n");
     return -1;
   }
   fclose(file);
 
   file = fopen(PT_IP_FILTER_PATH, "r");
   if (file == nullptr) {
-    printf("ERROR: ip_filtering is not support by your cpu architecture\n");
+    printf("ERROR: ip_filtering is not supported by your cpu architecture, check your cpu model and linux version (>= 4.x).\n");
     return -1;
   }
   fclose(file);
