@@ -129,7 +129,13 @@ make
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
 ```
 
-- In addition to including the latency of child function, also show the code block latency (-c). the code block contains where one branch ends and where another branch starts, we can analyze the most expensive instruction against the program assembly code.
+- Analyze the latency of target function according to specified ancestor function (-a). For example, if "-f func_a -a func_b#1,100" is given, we can get the latency of func_a where its ancestor function func_b has the latency ranges from 1ns to 100ns. This is useful to analyze the bottleneck of function with long-tail latency.
+
+```shell
+sudo ./func_latency -b bin/mysqld -f "buf_page_get_gen" -a "do_command#1,100000" -d 1 -p 60416 -s -i -t
+```
+
+- In addition to including the latency of child function, also show the code block latency (-c). the code block is defined from the point one branch ends to the point another branch starts, we can analyze the most expensive instruction against the program assembly code.
 
 ```shell
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -c

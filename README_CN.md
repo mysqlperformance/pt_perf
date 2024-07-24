@@ -135,6 +135,12 @@ make
 sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t -o
   ```
 
+  * 根据指定祖先函数 (-a) 过滤分析目标函数，例如指定 "-f func_a -a func_b#1,100"，可以查看从 func_b 时延在 1ns 到 100ns 时，func_a 的时延情况，这在分析函数时延长尾时的瓶颈非常有用。
+
+```shell
+sudo ./func_latency -b bin/mysqld -f "buf_page_get_gen" -a "do_command#1,100000" -d 1 -p 60416 -s -i -t
+```
+
   * 除了包括子函数的延迟，还可以显示代码块的延迟(-c)。代码块包含一个分支结束和另一个分支开始的位置，我们可以根据程序汇编代码分析最耗时的指令。
 
 ```shell
@@ -338,7 +344,7 @@ $ ./func_latency -d 10 -p 60416 -t --history=1
 [ perf record: Woken up 0 times to write data ]
 [ perf record: Captured and wrote 2863.829 MB perf.data ]
 ```
-* 使用历史数据查看 trx_commit 线程 id 为 123173 的时间分布，每 100 次 latency 取平均，也可以通过 -ti=start,min,max 缩小时间范围查看，或者 -li=min,max 缩小查看具体时延范围的 profile。图中在 5 s 的时候做过一次落盘切换，commit 时间发生改变。
+* 使用历史数据查看 trx_commit 线程 id 为 123173 的时间分布，每 100 次 latency 取平均，也可以通过 --ti=start,min,max 缩小时间范围查看，或者 --li=min,max 缩小查看具体时延范围的 profile。图中在 5 s 的时候做过一次落盘切换，commit 时间发生改变。
 
 ```shell
 $./func_latency -b bin/mysqld -f "trx_commit" -d 10 -t -s -l --tu=100 -T 123173 --history=2
