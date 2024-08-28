@@ -41,7 +41,8 @@ struct Param {
   std::pair<uint64_t, uint64_t> time_interval;
   uint64_t time_start;
   int history;
-  std::string sched_funcname;
+  std::string sched_funcname; // for linux 510 higher
+  std::string sched_funcname_419; // for linux 419
   std::string offcpu_filter;
 
   std::string flamegraph;
@@ -79,6 +80,25 @@ struct Action {
     IRET
   };
   static Symbol get_symbol(const std::string &str, Symbol *caller);
+  void init_for_sched() {
+    if ((to.name == param.sched_funcname || to.name == param.sched_funcname_419)
+        && to.offset == 0 && (type == Action::CALL || type == Action::TR_START)) {
+      sched_begin = true;
+    } else if ((from.name == param.sched_funcname || from.name == param.sched_funcname_419) &&
+               (type == Action::RETURN || type == Action::TR_END_RETURN)) {
+      sched_end = true;
+    }
+  }
+
+  void init_for_ancestor() {
+    if (to.name == param.ancestor && to.offset == 0 &&
+        (type == Action::CALL || type == Action::TR_START)) {
+      ancestor_begin = true;
+    } else if (from.name == param.ancestor && (type == Action::RETURN ||
+                type == Action::TR_END_RETURN)) {
+      ancestor_end = true;
+    }
+  }
 
   Symbol from;
   Symbol to;

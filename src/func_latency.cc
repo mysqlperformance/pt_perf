@@ -58,6 +58,7 @@ Param::Param() {
   timeline = false;
   timeline_unit = 1;
   sched_funcname = "__schedule";
+  sched_funcname_419 = "__sched_text_start";
   offcpu_filter = "filter " + sched_funcname +" ,";
   latency_interval = {0, UINT64_MAX};
   time_interval = {0, UINT64_MAX};
@@ -668,31 +669,13 @@ void ParseJob::decode_to_actions() {
 
       /* action for offcpu */
       action.sched_begin = action.sched_end = false;
-      if (param.offcpu) {
-        if (action.to.name == param.sched_funcname &&
-            action.to.offset == 0 && (action.type == Action::CALL
-            || action.type == Action::TR_START)) {
-          action.sched_begin = true;
-        } else if (action.from.name == param.sched_funcname &&
-                   (action.type == Action::RETURN ||
-                    action.type == Action::TR_END_RETURN)) {
-          action.sched_end = true;
-        }
-      }
+      if (param.offcpu)
+        action.init_for_sched();
 
       /* action for ancestor function */
       action.ancestor_begin = action.ancestor_end = false;
-      if (param.ancestor != "") {
-        if (action.to.name == param.ancestor &&
-            action.to.offset == 0 && (action.type == Action::CALL
-            || action.type == Action::TR_START)) {
-          action.ancestor_begin = true;
-        } else if (action.from.name == param.ancestor &&
-                   (action.type == Action::RETURN ||
-                    action.type == Action::TR_END_RETURN)) {
-          action.ancestor_end = true;
-        }
-      }
+      if (param.ancestor != "")
+        action.init_for_ancestor();
 
       if (!action.from_target && !action.to_target &&
           !action.sched_begin && !action.sched_end &&

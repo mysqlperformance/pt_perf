@@ -1873,8 +1873,10 @@ static bool intel_pt_func_filter_by_sym(
 	intel_pt_parse_sym(ptq, sample->addr, to_al);
 	if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
 		/* for schedule function of kernel */
-		if ((!from_al->sym || strcmp(from_al->sym->name, "__schedule"))
-				&& (!to_al->sym || strcmp(to_al->sym->name, "__schedule"))) {
+		if ((!from_al->sym || (strcmp(from_al->sym->name, "__schedule")
+				&& strcmp(from_al->sym->name, "__sched_text_start")))
+				&& (!to_al->sym || (strcmp(to_al->sym->name, "__schedule")
+				&& strcmp(to_al->sym->name, "__sched_text_start")))) {
 			return true;
 		}
 	} else if ((!from_al->sym || !func_filter_match(from_al->sym->name))
@@ -1898,8 +1900,10 @@ static bool intel_pt_func_filter_by_ip(
 		intel_pt_parse_sym(ptq, sample->ip, from_al);
 		intel_pt_parse_sym(ptq, sample->addr, to_al);
 		/* for schedule function of kernel */
-		if ((!from_al->sym || strcmp(from_al->sym->name, "__schedule"))
-				&& (!to_al->sym || strcmp(to_al->sym->name, "__schedule"))) {
+		if ((!from_al->sym || (strcmp(from_al->sym->name, "__schedule")
+				&& strcmp(from_al->sym->name, "__sched_text_start")))
+				&& (!to_al->sym || (strcmp(to_al->sym->name, "__schedule")
+				&& strcmp(to_al->sym->name, "__sched_text_start")))) {
 			return true;
 		}
 	} else {
