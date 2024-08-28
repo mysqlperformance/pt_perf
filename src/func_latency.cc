@@ -232,7 +232,7 @@ Symbol Action::get_symbol(const string &str, Symbol *caller) {
   
   std::string name = "";
   uint64_t addr;
-  uint offset;
+  uint32_t offset;
   size_t start, end;
 
   // address

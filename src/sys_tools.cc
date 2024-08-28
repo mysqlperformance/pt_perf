@@ -136,7 +136,7 @@ std::string get_current_dir() {
   return std::string(dirname(path));
 }
 
-static int filename_split(char *line, std::string &filename, uint &line_nr)
+static int filename_split(char *line, std::string &filename, uint32_t &line_nr)
 {
   std::string line_str(line);
 
@@ -167,7 +167,7 @@ static int filename_split(char *line, std::string &filename, uint &line_nr)
 void addr2line(const std::string &binary,
                uint64_t address,
                std::string &filename,
-               uint &line_nr)
+               uint32_t &line_nr)
 {
   std::stringstream cmd;
   char *line = NULL;
@@ -209,7 +209,7 @@ void addr2line(const std::string &binary,
 
   while (getline(&line, &line_len, a2l) != -1 && line_len) {
     std::string filename;
-    uint line_nr;
+    uint32_t line_nr;
     filename_split(line, filename, line_nr);
     filename_vec.push_back(filename);
     line_nr_vec.push_back(line_nr);

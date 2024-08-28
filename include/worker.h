@@ -7,6 +7,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <stdint.h>
 
 class ParallelJob {
 public:
@@ -28,7 +29,7 @@ private:
 
 class ParallelWorker {
 public:
-  ParallelWorker(uint i) : idx(i), thr(nullptr), should_stop(false), alive(false) {}
+  ParallelWorker(uint32_t i) : idx(i), thr(nullptr), should_stop(false), alive(false) {}
   ~ParallelWorker() {
     if (thr) {
       delete thr;
@@ -63,7 +64,7 @@ public:
   }
 
 private:
-  uint idx;
+  uint32_t idx;
   std::thread *thr;
   std::atomic_bool should_stop;
   std::atomic_bool alive;
@@ -86,7 +87,7 @@ public:
       workers[i] = nullptr;
     }
   }
-  void start(uint size) {
+  void start(uint32_t size) {
     if (!alive) {
       pool_size = size;
       for (size_t i=0; i<pool_size; ++i) {
@@ -102,13 +103,13 @@ public:
       worker->wait_idle();
     }
   }
-  void add_job(ParallelJob *job, uint idx) {
+  void add_job(ParallelJob *job, uint32_t idx) {
     if (!alive) return;
     workers[idx % pool_size]->add_job(job);
   }
 private:
   bool alive;
-  uint pool_size;
+  uint32_t pool_size;
   std::vector<ParallelWorker *> workers;
 };
 

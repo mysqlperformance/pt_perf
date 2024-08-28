@@ -54,7 +54,7 @@ extern Param param;
 struct Symbol {
   std::string name;
   uint64_t addr;
-  uint offset;
+  uint32_t offset;
   bool equal(struct Symbol *sym) {
     uint64_t func_addr1 = addr - offset;
     uint64_t func_addr2 = sym->addr - sym->offset;

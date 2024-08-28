@@ -116,7 +116,7 @@ public:
 private:
   Slot slots;
   std::string val_name;
-  uint width;
+  uint32_t width;
 };
 
 class HistogramBucket {

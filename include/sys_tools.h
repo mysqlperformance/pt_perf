@@ -67,7 +67,7 @@ std::string get_current_dir();
 void addr2line(const std::string &binary,
                uint64_t address,
                std::string &filename,
-               uint &line_nr);
+               uint32_t &line_nr);
 
 void addr2line(const std::string &binary,
                std::vector<uint64_t> &address_vec,
