@@ -18,6 +18,7 @@ using namespace std;
 
 static ParallelWorkerPool worker_pool;
 static string trace_error_str = " instruction trace error";
+static const string unknown_latency_str = "(unknown latency) ";
 /* the missing trace time because of the lost data  */
 static atomic<uint64_t> miss_trace_time{0};
 /* the real trace time based on minimum and maximum timestamp of actions */
@@ -310,7 +311,7 @@ void ThreadJob::do_analyze() {
     uint64_t lat_t = a2->ts - a1->ts;
     uint64_t lat_s = sched_in_child;
     if (unknown) {
-      child_name = "(unknown latency) " + child_name;
+      child_name = unknown_latency_str + child_name;
       lat_t = lat_s = 0;
     }
     child.add_target(child_name, lat_t);
@@ -703,9 +704,9 @@ static void init_print_width(Stat &stat) {
   if (param.srcline) num += 1;
   if (param.code_block) num += 1;
   HistogramBucket hist_b;
-  hist_b.init_key(stat.children.target, [&](const std::string &name) -> std::string {
-    if (param.srcline) { return funcname_get_name(name);}
-    return name;
+  hist_b.init_key(stat.children.target, [&](const std::string &name,
+        Bucket::Element &el) -> std::string {
+    return funcname_get_name(name);
   });
   global_print_width = std::max(HistogramDist::get_print_width(num), global_print_width);
   global_print_width = std::max(hist_b.get_print_width(num), global_print_width);
@@ -740,8 +741,10 @@ void Stat::add(Action &action_call, Action &action_return, uint64_t lat_s, Laten
     add_latency(lat_t, lat_s, caller);
     if (!param.code_block) {
       // add latency of target function self
-      child.add_target(TARGET_SELF, lat_t - child.target_total);
-      child.add_sched(TARGET_SELF, lat_s - child.sched_total);
+      child.add_target(TARGET_SELF,
+          lat_t > child.target_total ? lat_t - child.target_total : 0);
+      child.add_sched(TARGET_SELF,
+          lat_s > child.sched_total ? lat_s - child.sched_total : 0);
     }
     add_child_latency(child, caller);
   }
@@ -763,12 +766,15 @@ void Stat::LatencyChild::print_summary() {
 
   Bucket oncpu("cpu_pct(%)");
   Bucket srcline(param.call_line ? "call_line" : "src_line");
-  hist.init_key(target, [&](const std::string &name) -> std::string {
-    if (param.srcline) {
-      // print func_name without address
-      return funcname_get_name(name);
+  hist.init_key(target, [&](const std::string &name,
+        Bucket::Element &el) -> std::string {
+    if (name.find(unknown_latency_str) != std::string::npos) {
+      el.err_msg = "WARNING: Return of this child function is not found, "
+                    "you can trace its latency by '-f' directly";
+      return funcname_get_name(
+          name.substr(unknown_latency_str.size(), name.size()));
     }
-    return name;
+    return funcname_get_name(name);
   });
   if (param.srcline) {
     // add srcline to all buckets
@@ -858,21 +864,25 @@ void Stat::print_summary() {
   if (param.srcline) {
     generate_srcline();
   }
+  bool is_target_complete =
+        (latency.target.get_total() > 0);
   /* print target function's latency */
   print_cross_line('=');
-  snprintf(title, 1024,
-           "Histogram - Latency of [%s]:",
-           target_name.c_str());
-  print_title(title);
-  print_latency(latency);
+  if (is_target_complete) {
+    snprintf(title, 1024,
+             "Histogram - Latency of [%s]:",
+             target_name.c_str());
+    print_title(title);
+    print_latency(latency);
 
-  if (param.offcpu) {
-    printf("sched total: %lu, sched each time: %lu ns\n", sched_count,
-           sched_count > 0 ? (latency.sched.get_total() / sched_count) : 0);
+    if (param.offcpu) {
+      printf("sched total: %lu, sched each time: %lu ns\n", sched_count,
+             sched_count > 0 ? (latency.sched.get_total() / sched_count) : 0);
+    }
+    print_cross_line('-');
   }
 
   /* print child function's latency  */
-  print_cross_line('-');
   snprintf(title, 1024,
            "Histogram - Child functions's Latency of [%s]:",
            target_name.c_str());
@@ -887,6 +897,9 @@ void Stat::print_summary() {
       srcline_map.get(caller_name, srcline);
       caller_name = funcname_get_name(caller_name) + "(" + srcline + ")";
     }
+    if (is_target_complete && it.first == "unknown")
+      continue;
+
     /* target function's latency from current caller */
     print_cross_line('=');
     if (it.first != "unknown") {

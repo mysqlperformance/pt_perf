@@ -18,8 +18,10 @@ public:
     uint64_t total;
     double scale;
     std::string val_str;
+    std::string err_msg;
     int width;
-    Element() : count(0), total(0), scale(0.0), val_str(""), width(10) {}
+    Element() : count(0), total(0), scale(0.0),
+                val_str(""), err_msg(""), width(10) {}
     uint64_t get_avg() {
       if (!count) return 0;
       return (total / count);
@@ -96,6 +98,9 @@ public:
       it->second.width = w;
     }
   }
+  uint32_t get_width() {
+    return width;
+  }
   void set_val_name(const std::string &name) {
     val_name = name;
   }
@@ -131,12 +136,12 @@ public:
         total_max = el.total;
       }
       el.name = it->first;
-      el.val_str = f(el.name);
+      el.val_str = f(el.name, el);
       if (el.val_str.size() > max_key_length)
         max_key_length = el.val_str.size();
       keys.push_back(el);
     }
-    if (max_key_length > 40) max_key_length = 40;
+    if (max_key_length > 35) max_key_length = 35;
     std::sort(keys.begin(), keys.end());
   }
   void add_extra_bucket(Bucket *b) {

@@ -28,6 +28,18 @@ static void print_stars(uint64_t val, uint64_t val_max, int width)
     printf("+");
 }
 
+static void print_multi_line_text(uint32_t max_width,
+    uint32_t off, const std::string &text) {
+  int width = max_width - off;
+  int len = text.size();
+  int left = len;
+  while (left > 0) {
+    if (left != len) printf("%*s", off, "");
+    printf("%s\n", text.substr(len - left, width).c_str());
+    left -= width;
+  }
+}
+
 uint32_t HistogramBucket::get_print_width(uint32_t bucket_num) {
   uint32_t print_width = 0;
   print_width += max_key_length;
@@ -46,9 +58,12 @@ void HistogramBucket::print() {
   printf("%*s%-*s : %-*s %-*s", max_key_length / 2,
           "", max_key_length / 2, "name",
          10, "avg", 10, "cnt");
+  uint32_t max_print_width = max_key_length + 3 + 21;
   for (Bucket *bucket : extra_buckets) {
+    max_print_width += (bucket->get_width() + 1);
     bucket->print_val_name();
   }
+  max_print_width += 22;
   printf(" %-*s ", 20, "distribution (total)");
   printf("\n");
   for (auto it = keys.begin(); it != keys.end(); ++it) {
@@ -76,6 +91,10 @@ void HistogramBucket::print() {
     } else {
       printf("%-*s : ", max_key_length,
           el.val_str.substr(0, max_key_length).c_str());
+    }
+    if (!el.err_msg.empty()) {
+      print_multi_line_text(max_print_width, max_key_length + 3, el.err_msg);
+      continue;
     }
     /* 2. print avg and cnt */
     string print_flag = (avg >= INTEGER_TEN_ZEROS) ?
