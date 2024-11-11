@@ -512,7 +512,8 @@ void ThreadJob::do_analyze() {
           child.clear();
           sched_in_target = 0;
           stack.clear();
-        } else if (stack.size() == 2 && action.type != Action::TR_END_RETURN) {
+        } else if (!stack.empty() && stack.back().from_target
+            && action.type != Action::TR_END_RETURN) {
           /* for non-ipfiltering, return to target function from child function */
           add_one_child(&stack.back(), &action);
           stack.pop_back();
@@ -526,6 +527,12 @@ void ThreadJob::do_analyze() {
         abort();
     }
     cursor = &action;
+  }
+
+  if (!child.empty()) {
+     /* there are incomplete call chains, just add
+      * the child latency for more information */
+     stat.add_child_latency(child, "unknown");
   }
 }
 
