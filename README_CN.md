@@ -53,6 +53,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -c / --code_block      --- show the code block latency of target function
              --srcline         --- show the address, source file and line number of functions
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
+             --pt_config       --- set config term for intel pt event, currently 'cyc=1' by default
         --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
         -h / --help            --- show this help

@@ -51,6 +51,7 @@ Param::Param() {
   offcpu = false;
   srcline = true;
   call_line = true;
+  pt_config = "cyc=1";
 
   ancestor = "";
   ancestor_latency = {0, UINT64_MAX};
@@ -92,6 +93,7 @@ struct option opts[] = {
   {"tu", 1, NULL, '3'},
   {"history", 1, NULL, '2'},
   {"ancestor", 1, NULL, 'a'},
+  {"pt_config", 1, NULL, '6'},
   {"code_block", 0, NULL, 'c'},
   {"offcpu", 0, NULL, 'o'},
   {"srcline", 0, NULL, '5'},
@@ -129,6 +131,7 @@ static void usage() {
     "\t-c / --code_block      --- show the code block latency of target function\n"
     "\t     --srcline         --- instead of the call line, show the define line of functions\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
+    "\t     --pt_config       --- set config term for intel pt event, currently 'cyc=1' by default\n"
     "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
@@ -1148,8 +1151,8 @@ static void perf_record() {
 
   /* perf record */
   snprintf(perf_cmd, 1024,
-    "%s record -e intel_pt/cyc=1/%c -B %s %s -m,32M --no-bpf-event -- sleep %f",
-    param.perf_tool.c_str(), param.offcpu ? ' ' : 'u',
+    "%s record -e intel_pt/%s/%c -B %s %s -m,32M --no-bpf-event -- sleep %f",
+    param.perf_tool.c_str(), param.pt_config.c_str(), param.offcpu ? ' ' : 'u',
     record_filter, trace_param.str().c_str(), param.trace_time);
 
   if (param.verbose) printf("%s\n", perf_cmd);
@@ -1349,6 +1352,9 @@ int main(int argc, char *argv[]) {
         break;
       case '5':
         param.call_line = false;
+        break;
+      case '6':
+        param.pt_config = string(optarg);
         break;
       case 'c':
         param.code_block = true;

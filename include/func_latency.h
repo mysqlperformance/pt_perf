@@ -29,6 +29,7 @@ struct Param {
   bool offcpu;
   bool srcline;
   bool call_line;
+  std::string pt_config;
 
   std::string ancestor;
   std::pair<uint64_t, uint64_t> ancestor_latency;
