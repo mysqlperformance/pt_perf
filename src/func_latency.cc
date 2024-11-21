@@ -361,7 +361,7 @@ void ThreadJob::do_analyze() {
        if (!child.empty()) {
           /* there are not return action in last execution chain,
            * we just add the child latency information */
-          stat.add_child_latency(child, "unknown");
+          stat.add_child_latency(child, "unknown", false);
           child.clear();
        }
        /* this action is the start point for target function,
@@ -535,7 +535,7 @@ void ThreadJob::do_analyze() {
   if (!child.empty()) {
      /* there are incomplete call chains, just add
       * the child latency for more information */
-     stat.add_child_latency(child, "unknown");
+     stat.add_child_latency(child, "unknown", false);
   }
 }
 
@@ -853,10 +853,16 @@ static void print_latency(Stat::Latency &latency) {
 void Stat::generate_srcline() {
   // put all callers
   for (auto it = callers.begin(); it != callers.end(); ++it) {
+    LatencyCaller &caller = it->second;
     std::string name = it->first;
     uint64_t addr = funcname_get_addr(name);
     if (addr > 0)
       srcline_map.put(name, addr);
+    caller.children.target.loop_for_element([&](Bucket::Element &el){
+      uint64_t addr = funcname_get_addr(el.name);
+      if (addr > 0)
+        srcline_map.put(el.name, addr);
+    });
   }
   // put all children
   children.target.loop_for_element([&](Bucket::Element &el){
@@ -877,8 +883,8 @@ void Stat::print_summary() {
   bool is_target_complete =
         (latency.target.get_total() > 0);
   /* print target function's latency */
-  print_cross_line('=');
   if (is_target_complete) {
+    print_cross_line('=');
     snprintf(title, 1024,
              "Histogram - Latency of [%s]:",
              target_name.c_str());
@@ -890,14 +896,14 @@ void Stat::print_summary() {
              sched_count > 0 ? (latency.sched.get_total() / sched_count) : 0);
     }
     print_cross_line('-');
-  }
 
-  /* print child function's latency  */
-  snprintf(title, 1024,
-           "Histogram - Child functions's Latency of [%s]:",
-           target_name.c_str());
-  print_title(title);
-  children.print_summary();
+    /* print child function's latency  */
+    snprintf(title, 1024,
+             "Histogram - Child functions's Latency of [%s]:",
+             target_name.c_str());
+    print_title(title);
+    children.print_summary();
+  }
 
   for (auto &it : callers) {
     string caller_name = it.first;

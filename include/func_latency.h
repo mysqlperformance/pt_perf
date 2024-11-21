@@ -193,8 +193,10 @@ public:
       callers[caller].add_sched(lat_s);
     }
   }
-  void add_child_latency(LatencyChild &child, const std::string &caller) {
-    children.add_child(child);
+  void add_child_latency(LatencyChild &child,
+      const std::string &caller, bool gather = true) {
+    if (gather)
+      children.add_child(child);
     callers[caller].add_child(child);
   }
   
