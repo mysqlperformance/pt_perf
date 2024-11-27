@@ -75,6 +75,7 @@ struct Action {
     CALL,
     RETURN,
     SYSCALL,
+    SYSRET,
     JMP,
     JCC,
     HW_INT,
@@ -358,13 +359,13 @@ inline void funcname_add_addr(std::string &name, uint64_t addr) {
   name += ("|" + std::to_string(addr));
 }
 inline uint64_t funcname_get_addr(const std::string &name) {
-  size_t sep = name.find_first_of('|');
+  size_t sep = name.find_last_of('|');
   if (sep == std::string::npos)
     return 0;
   return stol(name.substr(sep + 1, name.size() - sep + 1));
 }
 inline std::string funcname_get_name(const std::string &name) {
-  size_t sep = name.find_first_of('|');
+  size_t sep = name.find_last_of('|');
   if (sep == std::string::npos)
     return name;
   return name.substr(0, sep);

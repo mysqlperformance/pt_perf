@@ -1,0 +1,452 @@
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% offcpu per_thread test 1    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -o -t --history=2
+[ parsed 564 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m========================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [thread_func]
+                             called from [unknown(-)]:[0m
+            name         : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| do_cpu_work            : 5634746    22         binary.cc:47  5461965    3.80      |***************     |
+| do_io                  : 5090859    32         binary.cc:45  5056933    1.09      |********************|
+| rand@plt               : 129        57         binary.cc:43  0          0.01      |                    |
+| std::atomic_bool::load : 33         57         binary.cc:42  0          0.00      |                    |
+
+[33m========================================================================================================================[0m
+../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 -o -t --history=2
+[ parsed 74144 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_cpu_work]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   1048576 -> 2097151    : 1        |**                  | 2        |****                |
+   2097152 -> 4194303    : 7        |**************      | 7        |***************     |
+   4194304 -> 8388607    : 10       |********************| 9        |********************|
+   8388608 -> 16777215   : 4        |********            | 4        |********            |
+trace count: 22, average latency: 5634746 ns
+sched count: 22,   sched latency: 5461965 ns, cpu percent: 3 %
+sched total: 71, sched each time: 1692440 ns
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_cpu_work]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 5463979    22         binary.cc:36  5461965    0.04      |********************|
+| std::to_string                       : 251        11264      binary.cc:34  0          2.83      |                    |
+| std::string::operator=@plt           : 123        22         binary.cc:32  0          0.00      |                    |
+| std::basic_string<char, std::char_tr
+    aits<char>, std::allocator<char> >
+    ::~basic_string@plt                : 69         11264      binary.cc:34  0          0.79      |                    |
+| *self                                : 68         22         -             0          0.00      |                    |
+| std::string::operator                : 11         11264      binary.cc:34  0          0.13      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 0          22         binary.cc:36  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_cpu_work]
+           called from [thread_func(binary.cc:37)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   1048576 -> 2097151    : 1        |**                  | 2        |****                |
+   2097152 -> 4194303    : 7        |**************      | 7        |***************     |
+   4194304 -> 8388607    : 10       |********************| 9        |********************|
+   8388608 -> 16777215   : 4        |********            | 4        |********            |
+trace count: 22, average latency: 5634746 ns
+sched count: 22,   sched latency: 5461965 ns, cpu percent: 3 %
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_cpu_work]
+                             called from [thread_func(binary.cc:37)]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 5463979    22         binary.cc:36  5461965    0.04      |********************|
+| std::to_string                       : 251        11264      binary.cc:34  0          2.83      |                    |
+| std::string::operator=@plt           : 123        22         binary.cc:32  0          0.00      |                    |
+| std::basic_string<char, std::char_tr
+    aits<char>, std::allocator<char> >
+    ::~basic_string@plt                : 69         11264      binary.cc:34  0          0.79      |                    |
+| *self                                : 68         22         -             0          0.00      |                    |
+| std::string::operator                : 11         11264      binary.cc:34  0          0.13      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 0          22         binary.cc:36  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t --history=2
+[ parsed 876 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]:[0m
+          ns             : cnt        distribution        sched      distribution        
+    524288 -> 1048575    : 1        |*                   | 1        |*                   |
+   1048576 -> 2097151    : 8        |************        | 8        |************        |
+   2097152 -> 4194303    : 5        |*******             | 5        |*******             |
+   4194304 -> 8388607    : 13       |********************| 13       |********************|
+   8388608 -> 16777215   : 5        |*******             | 5        |*******             |
+trace count: 32, average latency: 5090859 ns
+sched count: 32,   sched latency: 5056933 ns, cpu percent: 1 %
+sched total: 71, sched each time: 2279181 ns
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 5052520    32         binary.cc:26  5050362    0.07      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 20600      32         binary.cc:23  6570       0.45      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 10764      32         binary.cc:27  0          0.34      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 4625       32         binary.cc:25  0          0.15      |                    |
+| std::ostream::operator<<@plt         : 2021       32         binary.cc:25  0          0.06      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 204        32         binary.cc:28  0          0.01      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 57         32         binary.cc:24  0          0.00      |                    |
+| std::operator|                       : 33         32         binary.cc:23  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 19         32         binary.cc:26  0          0.00      |                    |
+| *self                                : 11         32         -             0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]
+           called from [thread_func(binary.cc:29)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+    524288 -> 1048575    : 1        |*                   | 1        |*                   |
+   1048576 -> 2097151    : 8        |************        | 8        |************        |
+   2097152 -> 4194303    : 5        |*******             | 5        |*******             |
+   4194304 -> 8388607    : 13       |********************| 13       |********************|
+   8388608 -> 16777215   : 5        |*******             | 5        |*******             |
+trace count: 32, average latency: 5090859 ns
+sched count: 32,   sched latency: 5056933 ns, cpu percent: 1 %
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]
+                             called from [thread_func(binary.cc:29)]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 5052520    32         binary.cc:26  5050362    0.07      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 20600      32         binary.cc:23  6570       0.45      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 10764      32         binary.cc:27  0          0.34      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 4625       32         binary.cc:25  0          0.15      |                    |
+| std::ostream::operator<<@plt         : 2021       32         binary.cc:25  0          0.06      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 204        32         binary.cc:28  0          0.01      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 57         32         binary.cc:24  0          0.00      |                    |
+| std::operator|                       : 33         32         binary.cc:23  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 19         32         binary.cc:26  0          0.00      |                    |
+| *self                                : 11         32         -             0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t --li=4194304,8388607 --history=2
+[ parsed 876 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   4194304 -> 8388607    : 13       |********************| 13       |********************|
+trace count: 13, average latency: 6405791 ns
+sched count: 13,   sched latency: 6371089 ns, cpu percent: 0 %
+sched total: 71, sched each time: 1166537 ns
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 6363014    13         binary.cc:26  6360769    0.03      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 24654      13         binary.cc:23  10319      0.19      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 11247      13         binary.cc:27  0          0.15      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 4566       13         binary.cc:25  0          0.06      |                    |
+| std::ostream::operator<<@plt         : 2008       13         binary.cc:25  0          0.03      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 198        13         binary.cc:28  0          0.00      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 52         13         binary.cc:24  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 19         13         binary.cc:26  0          0.00      |                    |
+| std::operator|                       : 17         13         binary.cc:23  0          0.00      |                    |
+| *self                                : 11         13         -             0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]
+           called from [thread_func(binary.cc:29)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   4194304 -> 8388607    : 13       |********************| 13       |********************|
+trace count: 13, average latency: 6405791 ns
+sched count: 13,   sched latency: 6371089 ns, cpu percent: 0 %
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]
+                             called from [thread_func(binary.cc:29)]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 6363014    13         binary.cc:26  6360769    0.03      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 24654      13         binary.cc:23  10319      0.19      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 11247      13         binary.cc:27  0          0.15      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 4566       13         binary.cc:25  0          0.06      |                    |
+| std::ostream::operator<<@plt         : 2008       13         binary.cc:25  0          0.03      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 198        13         binary.cc:28  0          0.00      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 52         13         binary.cc:24  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 19         13         binary.cc:26  0          0.00      |                    |
+| std::operator|                       : 17         13         binary.cc:23  0          0.00      |                    |
+| *self                                : 11         13         -             0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% offcpu per_thread test 2    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -o -t -i --history=2
+[ parsed 474 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m========================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [thread_func]
+                             called from [unknown(-)]:[0m
+            name         : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| do_io                  : 5889540    25         binary.cc:45  5857941    0.78      |********************|
+| do_cpu_work            : 5192673    28         binary.cc:47  5089617    2.85      |******************* |
+| rand@plt               : 181        56         binary.cc:43  0          0.01      |                    |
+| std::atomic_bool::load : 26         56         binary.cc:42  0          0.00      |                    |
+
+[33m========================================================================================================================[0m
+../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 -o -t -i --history=2
+[ parsed 74058 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_cpu_work]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   1048576 -> 2097151    : 5        |**************      | 7        |********************|
+   2097152 -> 4194303    : 7        |********************| 5        |**************      |
+   4194304 -> 8388607    : 7        |********************| 7        |********************|
+   8388608 -> 16777215   : 4        |***********         | 4        |***********         |
+trace count: 23, average latency: 5163544 ns
+sched count: 23,   sched latency: 5054125 ns, cpu percent: 2 %
+sched total: 64, sched each time: 1816326 ns
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_cpu_work]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 5055142    23         binary.cc:36  5054125    0.02      |********************|
+| *self                                : 812        23         -             0          0.02      |                    |
+| std::to_string                       : 162        11776      binary.cc:34  0          1.91      |                    |
+| std::string::operator=@plt           : 109        23         binary.cc:32  0          0.00      |                    |
+| std::basic_string<char, std::char_tr
+    aits<char>, std::allocator<char> >
+    ::~basic_string@plt                : 38         11776      binary.cc:34  0          0.46      |                    |
+| std::string::operator                : 8          11776      binary.cc:34  0          0.11      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 5          23         binary.cc:36  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_cpu_work]
+           called from [thread_func(binary.cc:37)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   1048576 -> 2097151    : 5        |**************      | 7        |********************|
+   2097152 -> 4194303    : 7        |********************| 5        |**************      |
+   4194304 -> 8388607    : 7        |********************| 7        |********************|
+   8388608 -> 16777215   : 4        |***********         | 4        |***********         |
+trace count: 23, average latency: 5163544 ns
+sched count: 23,   sched latency: 5054125 ns, cpu percent: 2 %
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_cpu_work]
+                             called from [thread_func(binary.cc:37)]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 5055142    23         binary.cc:36  5054125    0.02      |********************|
+| *self                                : 812        23         -             0          0.02      |                    |
+| std::to_string                       : 162        11776      binary.cc:34  0          1.91      |                    |
+| std::string::operator=@plt           : 109        23         binary.cc:32  0          0.00      |                    |
+| std::basic_string<char, std::char_tr
+    aits<char>, std::allocator<char> >
+    ::~basic_string@plt                : 38         11776      binary.cc:34  0          0.46      |                    |
+| std::string::operator                : 8          11776      binary.cc:34  0          0.11      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 5          23         binary.cc:36  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t -i --history=2
+[ parsed 534 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   1048576 -> 2097151    : 2        |****                | 2        |****                |
+   2097152 -> 4194303    : 5        |***********         | 5        |***********         |
+   4194304 -> 8388607    : 9        |********************| 9        |********************|
+   8388608 -> 16777215   : 5        |***********         | 5        |***********         |
+trace count: 21, average latency: 6135446 ns
+sched count: 21,   sched latency: 6105393 ns, cpu percent: 0 %
+sched total: 51, sched each time: 2513985 ns
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 6101930    21         binary.cc:26  6100859    0.02      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 16916      21         binary.cc:23  4533       0.26      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 9898       21         binary.cc:27  0          0.21      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 4661       21         binary.cc:25  0          0.10      |                    |
+| std::ostream::operator<<@plt         : 1736       21         binary.cc:25  0          0.04      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 210        21         binary.cc:28  0          0.00      |                    |
+| *self                                : 56         21         -             0          0.00      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 21         21         binary.cc:24  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 11         21         binary.cc:26  0          0.00      |                    |
+| std::operator|                       : 1          21         binary.cc:23  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]
+           called from [thread_func(binary.cc:29)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   1048576 -> 2097151    : 2        |****                | 2        |****                |
+   2097152 -> 4194303    : 5        |***********         | 5        |***********         |
+   4194304 -> 8388607    : 9        |********************| 9        |********************|
+   8388608 -> 16777215   : 5        |***********         | 5        |***********         |
+trace count: 21, average latency: 6135446 ns
+sched count: 21,   sched latency: 6105393 ns, cpu percent: 0 %
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]
+                             called from [thread_func(binary.cc:29)]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 6101930    21         binary.cc:26  6100859    0.02      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 16916      21         binary.cc:23  4533       0.26      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 9898       21         binary.cc:27  0          0.21      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 4661       21         binary.cc:25  0          0.10      |                    |
+| std::ostream::operator<<@plt         : 1736       21         binary.cc:25  0          0.04      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 210        21         binary.cc:28  0          0.00      |                    |
+| *self                                : 56         21         -             0          0.00      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 21         21         binary.cc:24  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 11         21         binary.cc:26  0          0.00      |                    |
+| std::operator|                       : 1          21         binary.cc:23  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t -i --li=4194304,8388607 --history=2
+[ parsed 534 actions, trace errors: 0 ]
+[ real trace time: 0.10 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   4194304 -> 8388607    : 9        |********************| 9        |********************|
+trace count:  9, average latency: 6535412 ns
+sched count:  9,   sched latency: 6503839 ns, cpu percent: 0 %
+sched total: 51, sched each time: 1147736 ns
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 6500387    9          binary.cc:26  6499301    0.01      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 17566      9          binary.cc:23  4538       0.12      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 10083      9          binary.cc:27  0          0.09      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 5261       9          binary.cc:25  0          0.05      |                    |
+| std::ostream::operator<<@plt         : 1794       9          binary.cc:25  0          0.02      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 220        9          binary.cc:28  0          0.00      |                    |
+| *self                                : 60         9          -             0          0.00      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 22         9          binary.cc:24  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 13         9          binary.cc:26  0          0.00      |                    |
+| std::operator|                       : 2          9          binary.cc:23  0          0.00      |                    |
+
+[33m============================================================================================================================[0m
+[32mHistogram - Latency of [do_io]
+           called from [thread_func(binary.cc:29)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+   4194304 -> 8388607    : 9        |********************| 9        |********************|
+trace count:  9, average latency: 6535412 ns
+sched count:  9,   sched latency: 6503839 ns, cpu percent: 0 %
+
+[33m----------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_io]
+                             called from [thread_func(binary.cc:29)]:[0m
+                   name                : avg        cnt        call_line     sched_time cpu_pct(%) distribution (total) 
+| std::this_thread::sleep_for<long, st
+    d::ratio<1l, 1000l> >              : 6500387    9          binary.cc:26  6499301    0.01      |********************|
+| std::basic_ofstream<char, std::char_
+    traits<char> >::basic_ofstream@plt : 17566      9          binary.cc:23  4538       0.12      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::close@plt          : 10083      9          binary.cc:27  0          0.09      |                    |
+| std::operator<< <char, std::char_tra
+    its<char>, std::allocator<char> >@
+    plt                                : 5261       9          binary.cc:25  0          0.05      |                    |
+| std::ostream::operator<<@plt         : 1794       9          binary.cc:25  0          0.02      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::~basic_ofstream@pl
+    t                                  : 220        9          binary.cc:28  0          0.00      |                    |
+| *self                                : 60         9          -             0          0.00      |                    |
+| std::basic_ofstream<char, std::char_
+    traits<char> >::is_open@plt        : 22         9          binary.cc:24  0          0.00      |                    |
+| std::chrono::duration<long, std::rat
+    io<1l, 1000l> >::duration<int, voi
+    d>                                 : 13         9          binary.cc:26  0          0.00      |                    |
+| std::operator|                       : 2          9          binary.cc:23  0          0.00      |                    |
+
+[33m============================================================================================================================[0m

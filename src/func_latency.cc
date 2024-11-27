@@ -586,7 +586,7 @@ void ThreadJob::extract_actions() {
 
 static std::vector<std::string> action_type_strs = {
   "tr strt", "tr end  call", "tr end  return", "tr end  hw int",
-  "tr end  syscall", "tr end", "call", "return", "syscall",
+  "tr end  syscall", "tr end", "call", "return", "syscall", "sysret",
   "jmp", "jcc", "hw int", "iret"
 };
 
@@ -598,12 +598,14 @@ void ParseJob::decode_to_actions() {
     while(getline(ifs, line)) {
       Action action;
       action.id = id;
-      action.lnum = ++lnum;
       action.is_error = false;
       action.from_target = action.to_target = false;
-      if (action.lnum < from || action.lnum >= to) {
+      if (lnum < from || lnum >= to) {
+        ++lnum;
         continue;
       }
+
+      action.lnum = ++lnum;
       if (!line.compare(0, trace_error_str.size(),
               trace_error_str, 0, trace_error_str.size())) {
         if (line.find("Lost trace data") == string::npos) {
@@ -957,8 +959,10 @@ void Stat::print_timeline() {
 static void print_stat(unordered_map<long, ThreadJob *> &thread_jobs) {
   auto t1 = ut_time_now();
   if (param.timeline) {
-    for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it) {
-      ThreadJob *thread_job = it->second;
+    vector<std::pair<long, ThreadJob *>> vec(thread_jobs.begin(), thread_jobs.end());
+    std::sort(vec.begin(), vec.end());
+    for (const auto &it: vec) {
+      ThreadJob *thread_job = it.second;
       Stat &stat = thread_job->get_stat();
       char title[1024];
       snprintf(title, 1024, "\nThread %ld: ", thread_job->get_tid());
@@ -1452,7 +1456,9 @@ int main(int argc, char *argv[]) {
   worker_pool.start(param.worker_num);
 
   // perf script
-  perf_script();
+  if (param.history < 3) {
+    perf_script();
+  }
 
   if (param.flamegraph != "") {
     // flamegraph mode
@@ -1469,6 +1475,6 @@ int main(int argc, char *argv[]) {
 
   /* clear resource */
   if (!param.verbose && !param.history) clear_record_files();
-  if (!param.verbose) clear_script_files();
+  if (!param.verbose && param.history < 3) clear_script_files();
   exit(0);
 }

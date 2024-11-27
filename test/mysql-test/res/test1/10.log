@@ -1,0 +1,1268 @@
+test case [do_command]
+[ start 10 parallel workers ]
+[ parsed 21000 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [do_command]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 1        |                    |
+     32768 -> 65535      : 297      |********************|
+     65536 -> 131071     : 262      |*****************   |
+    131072 -> 262143     : 71       |****                |
+    262144 -> 524287     : 65       |****                |
+trace count: 696, average latency: 107824 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_command]:[0m
+                   name                : avg        cnt        call_line          distribution (total) 
+| dispatch_command                     : 86436      696        sql_parse.cc:1466 |********************|
+| Protocol_classic::get_command        : 21072      696        sql_parse.cc:1404 |****                |
+| *self                                : 77         696        -                 |                    |
+| my_net_set_read_timeout              : 55         696        sql_parse.cc:1353 |                    |
+| THD::get_protocol_classic            : 39         696        sql_parse.cc:1352 |                    |
+| my_net_set_read_timeout              : 38         696        sql_parse.cc:1462 |                    |
+| THD::get_protocol_classic            : 38         696        sql_parse.cc:1455 |                    |
+| THD::get_protocol_classic            : 29         696        sql_parse.cc:1467 |                    |
+| THD::get_protocol                    : 18         696        sql_parse.cc:1404 |                    |
+| THD::get_protocol_classic            : 12         696        sql_parse.cc:1459 |                    |
+| Thd_mem_cnt::reset                   : 3          696        sql_parse.cc:1388 |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 2          696        sql_parse.cc:1344 |                    |
+| Protocol_classic::get_net            : 0          696        sql_parse.cc:1352 |                    |
+| Protocol_classic::get_output_packet  : 0          696        sql_parse.cc:1459 |                    |
+| Protocol_classic::get_output_packet  : 0          696        sql_parse.cc:1467 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [do_command]
+           called from [handle_connection(sql_parse.cc:1475)]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 1        |                    |
+     32768 -> 65535      : 297      |********************|
+     65536 -> 131071     : 262      |*****************   |
+    131072 -> 262143     : 71       |****                |
+    262144 -> 524287     : 65       |****                |
+trace count: 696, average latency: 107824 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_command]
+                             called from [handle_connection(sql_parse.cc:1475)]:[0m
+                   name                : avg        cnt        call_line          distribution (total) 
+| dispatch_command                     : 86436      696        sql_parse.cc:1466 |********************|
+| Protocol_classic::get_command        : 21072      696        sql_parse.cc:1404 |****                |
+| *self                                : 77         696        -                 |                    |
+| my_net_set_read_timeout              : 55         696        sql_parse.cc:1353 |                    |
+| THD::get_protocol_classic            : 39         696        sql_parse.cc:1352 |                    |
+| my_net_set_read_timeout              : 38         696        sql_parse.cc:1462 |                    |
+| THD::get_protocol_classic            : 38         696        sql_parse.cc:1455 |                    |
+| THD::get_protocol_classic            : 29         696        sql_parse.cc:1467 |                    |
+| THD::get_protocol                    : 18         696        sql_parse.cc:1404 |                    |
+| THD::get_protocol_classic            : 12         696        sql_parse.cc:1459 |                    |
+| Thd_mem_cnt::reset                   : 3          696        sql_parse.cc:1388 |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 2          696        sql_parse.cc:1344 |                    |
+| Protocol_classic::get_net            : 0          696        sql_parse.cc:1352 |                    |
+| Protocol_classic::get_output_packet  : 0          696        sql_parse.cc:1459 |                    |
+| Protocol_classic::get_output_packet  : 0          696        sql_parse.cc:1467 |                    |
+
+[33m======================================================================================================[0m
+test case [dispatch_command]
+[ start 10 parallel workers ]
+[ parsed 41398 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [dispatch_command]:[0m
+          ns             : cnt        distribution        
+      8192 -> 16383      : 12       |                    |
+     16384 -> 32767      : 23       |*                   |
+     32768 -> 65535      : 443      |********************|
+     65536 -> 131071     : 115      |*****               |
+    131072 -> 262143     : 45       |**                  |
+    262144 -> 524287     : 68       |***                 |
+trace count: 706, average latency: 89038 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [dispatch_command]:[0m
+                   name                : avg        cnt        call_line              distribution (total) 
+| mysqld_stmt_execute                  : 79096      671        sql_parse.cc:2002     |********************|
+| THD::send_statement_status           : 11898      706        sql_parse.cc:2433     |***                 |
+| dispatch_sql_command                 : 7166       35         sql_parse.cc:2122     |                    |
+| alloc_query                          : 218        35         sql_parse.cc:2076     |                    |
+| *self                                : 189        706        -                     |                    |
+| THD::reset_for_next_command          : 136        671        sql_parse.cc:1989     |                    |
+| pthread_mutex_lock@plt               : 115        706        thr_mutex.h:95        |                    |
+| mysql_stmt_precheck                  : 110        671        sql_parse.cc:1992     |                    |
+| mysql_event_tracking_command_notify  : 107        706        sql_parse.cc:1852     |                    |
+| Lex_input_stream::init               : 101        35         sql_lex.h:4804        |                    |
+| THD::update_slow_query_status        : 97         706        sql_parse.cc:2431     |                    |
+| THD::set_time                        : 93         706        sql_parse.cc:1770     |                    |
+| copy_bind_parameter_values           : 89         671        sql_parse.cc:1994     |                    |
+| mysql_event_tracking_general_notify  : 89         706        sql_parse.cc:2448     |                    |
+| THD::set_query                       : 84         706        sql_class.h:4226      |                    |
+| log_slow_statement                   : 74         706        sql_parse.cc:2462     |                    |
+| THD::set_command                     : 63         706        sql_parse.cc:1753     |                    |
+| pfs_set_thread_info_vc               : 59         706        sql_class.h:4196      |                    |
+| MEM_ROOT::ClearForReuse              : 48         706        sql_parse.cc:2497     |                    |
+| THD::get_protocol                    : 48         706        sql_parse.cc:1822     |                    |
+| THD::enter_stage                     : 45         706        sql_parse.cc:2464     |                    |
+| pthread_mutex_unlock@plt             : 36         706        thr_mutex.h:120       |                    |
+| mysql_event_tracking_command_notify  : 30         706        sql_parse.cc:2459     |                    |
+| Session_consistency_gtids_ctx::notif
+    y_after_response_packet            : 29         706        sql_parse.cc:2445     |                    |
+| mysql_event_tracking_general_notify  : 26         706        sql_parse.cc:2452     |                    |
+| get_max_digest_length                : 17         35         sql_parse.cc:2106     |                    |
+| PROFILING::finish_current_query      : 14         706        sql_parse.cc:2503     |                    |
+| PROFILING::start_new_query           : 8          706        sql_parse.cc:1746     |                    |
+| pfs_end_stage_v1                     : 6          706        mysql_statement.h:271 |                    |
+| THD::set_secondary_engine_statement_
+    context                            : 4          35         sql_parse.cc:2217     |                    |
+| Yacc_state::~Yacc_state              : 3          35         sql_lex.h:4784        |                    |
+| PROFILING::set_query_source          : 2          35         sql_parse.cc:2091     |                    |
+| THD::set_command                     : 1          706        sql_parse.cc:2467     |                    |
+| Command_names::str_global            : 1          706        sql_parse.cc:1854     |                    |
+| copy_bind_parameter_values           : 1          35         sql_parse.cc:2118     |                    |
+| Protocol_text::type                  : 0          706        sql_parse.cc:1822     |                    |
+| Command_names::str_global            : 0          706        sql_parse.cc:2451     |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [dispatch_command]
+           called from [do_command(sql_parse.cc:2507)]:[0m
+          ns             : cnt        distribution        
+      8192 -> 16383      : 12       |                    |
+     16384 -> 32767      : 23       |*                   |
+     32768 -> 65535      : 443      |********************|
+     65536 -> 131071     : 115      |*****               |
+    131072 -> 262143     : 45       |**                  |
+    262144 -> 524287     : 68       |***                 |
+trace count: 706, average latency: 89038 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [dispatch_command]
+                             called from [do_command(sql_parse.cc:2507)]:[0m
+                   name                : avg        cnt        call_line              distribution (total) 
+| mysqld_stmt_execute                  : 79096      671        sql_parse.cc:2002     |********************|
+| THD::send_statement_status           : 11898      706        sql_parse.cc:2433     |***                 |
+| dispatch_sql_command                 : 7166       35         sql_parse.cc:2122     |                    |
+| alloc_query                          : 218        35         sql_parse.cc:2076     |                    |
+| *self                                : 189        706        -                     |                    |
+| THD::reset_for_next_command          : 136        671        sql_parse.cc:1989     |                    |
+| pthread_mutex_lock@plt               : 115        706        thr_mutex.h:95        |                    |
+| mysql_stmt_precheck                  : 110        671        sql_parse.cc:1992     |                    |
+| mysql_event_tracking_command_notify  : 107        706        sql_parse.cc:1852     |                    |
+| Lex_input_stream::init               : 101        35         sql_lex.h:4804        |                    |
+| THD::update_slow_query_status        : 97         706        sql_parse.cc:2431     |                    |
+| THD::set_time                        : 93         706        sql_parse.cc:1770     |                    |
+| copy_bind_parameter_values           : 89         671        sql_parse.cc:1994     |                    |
+| mysql_event_tracking_general_notify  : 89         706        sql_parse.cc:2448     |                    |
+| THD::set_query                       : 84         706        sql_class.h:4226      |                    |
+| log_slow_statement                   : 74         706        sql_parse.cc:2462     |                    |
+| THD::set_command                     : 63         706        sql_parse.cc:1753     |                    |
+| pfs_set_thread_info_vc               : 59         706        sql_class.h:4196      |                    |
+| MEM_ROOT::ClearForReuse              : 48         706        sql_parse.cc:2497     |                    |
+| THD::get_protocol                    : 48         706        sql_parse.cc:1822     |                    |
+| THD::enter_stage                     : 45         706        sql_parse.cc:2464     |                    |
+| pthread_mutex_unlock@plt             : 36         706        thr_mutex.h:120       |                    |
+| mysql_event_tracking_command_notify  : 30         706        sql_parse.cc:2459     |                    |
+| Session_consistency_gtids_ctx::notif
+    y_after_response_packet            : 29         706        sql_parse.cc:2445     |                    |
+| mysql_event_tracking_general_notify  : 26         706        sql_parse.cc:2452     |                    |
+| get_max_digest_length                : 17         35         sql_parse.cc:2106     |                    |
+| PROFILING::finish_current_query      : 14         706        sql_parse.cc:2503     |                    |
+| PROFILING::start_new_query           : 8          706        sql_parse.cc:1746     |                    |
+| pfs_end_stage_v1                     : 6          706        mysql_statement.h:271 |                    |
+| THD::set_secondary_engine_statement_
+    context                            : 4          35         sql_parse.cc:2217     |                    |
+| Yacc_state::~Yacc_state              : 3          35         sql_lex.h:4784        |                    |
+| PROFILING::set_query_source          : 2          35         sql_parse.cc:2091     |                    |
+| THD::set_command                     : 1          706        sql_parse.cc:2467     |                    |
+| Command_names::str_global            : 1          706        sql_parse.cc:1854     |                    |
+| copy_bind_parameter_values           : 1          35         sql_parse.cc:2118     |                    |
+| Protocol_text::type                  : 0          706        sql_parse.cc:1822     |                    |
+| Command_names::str_global            : 0          706        sql_parse.cc:2451     |                    |
+
+[33m======================================================================================================[0m
+test case [mysqld_stmt_execute]
+[ start 10 parallel workers ]
+[ parsed 15196 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m=====================================================================================================[0m
+[32mHistogram - Latency of [mysqld_stmt_execute]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 239      |********************|
+     32768 -> 65535      : 229      |******************* |
+     65536 -> 131071     : 91       |*******             |
+    131072 -> 262143     : 36       |***                 |
+    262144 -> 524287     : 39       |***                 |
+trace count: 634, average latency: 77168 ns
+
+[33m-----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [mysqld_stmt_execute]:[0m
+                  name               : avg        cnt        call_line            distribution (total) 
+| Prepared_statement::execute_loop   : 74366      634        sql_prepare.cc:1872 |********************|
+| Prepared_statement::set_parameters : 1701       634        sql_prepare.cc:1870 |                    |
+| statement_id_to_session            : 792        634        sql_prepare.cc:1841 |                    |
+| *self                              : 68         634        -                   |                    |
+| my_free                            : 66         600        sql_string.h:404    |                    |
+| THD::pop_protocol                  : 55         634        sql_prepare.cc:1875 |                    |
+| THD::is_classic_protocol           : 46         634        sql_prepare.cc:1848 |                    |
+| THD::push_protocol                 : 44         634        sql_class.h:3355    |                    |
+| THD::get_protocol                  : 23         634        sql_prepare.cc:1852 |                    |
+| PROFILING::set_query_source        : 5          634        sql_prepare.cc:1843 |                    |
+| sp_cache_enforce_limit             : 1          634        sql_prepare.cc:1877 |                    |
+| sp_cache_enforce_limit             : 1          634        sql_prepare.cc:1878 |                    |
+
+[33m=====================================================================================================[0m
+[32mHistogram - Latency of [mysqld_stmt_execute]
+           called from [dispatch_command(sql_prepare.cc:1883)]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 239      |********************|
+     32768 -> 65535      : 195      |****************    |
+     65536 -> 131071     : 91       |*******             |
+    131072 -> 262143     : 36       |***                 |
+    262144 -> 524287     : 39       |***                 |
+trace count: 600, average latency: 79150 ns
+
+[33m-----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [mysqld_stmt_execute]
+                             called from [dispatch_command(sql_prepare.cc:1883)]:[0m
+                  name               : avg        cnt        call_line            distribution (total) 
+| Prepared_statement::execute_loop   : 76255      600        sql_prepare.cc:1872 |********************|
+| Prepared_statement::set_parameters : 1796       600        sql_prepare.cc:1870 |                    |
+| statement_id_to_session            : 788        600        sql_prepare.cc:1841 |                    |
+| my_free                            : 66         600        sql_string.h:404    |                    |
+| *self                              : 65         600        -                   |                    |
+| THD::pop_protocol                  : 55         600        sql_prepare.cc:1875 |                    |
+| THD::is_classic_protocol           : 45         600        sql_prepare.cc:1848 |                    |
+| THD::push_protocol                 : 44         600        sql_class.h:3355    |                    |
+| THD::get_protocol                  : 23         600        sql_prepare.cc:1852 |                    |
+| PROFILING::set_query_source        : 5          600        sql_prepare.cc:1843 |                    |
+| sp_cache_enforce_limit             : 1          600        sql_prepare.cc:1877 |                    |
+| sp_cache_enforce_limit             : 1          600        sql_prepare.cc:1878 |                    |
+
+[33m=====================================================================================================[0m
+[32mHistogram - Latency of [mysqld_stmt_execute]
+           called from [dispatch_command(sql_prepare.cc:1883)]:[0m
+          ns             : cnt        distribution        
+     32768 -> 65535      : 34       |********************|
+trace count: 34, average latency: 42204 ns
+
+[33m-----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [mysqld_stmt_execute]
+                             called from [dispatch_command(sql_prepare.cc:1883)]:[0m
+                  name               : avg        cnt        call_line            distribution (total) 
+| Prepared_statement::execute_loop   : 41034      34         sql_prepare.cc:1872 |********************|
+| statement_id_to_session            : 845        34         sql_prepare.cc:1841 |                    |
+| *self                              : 114        34         -                   |                    |
+| THD::pop_protocol                  : 59         34         sql_prepare.cc:1875 |                    |
+| THD::is_classic_protocol           : 57         34         sql_prepare.cc:1848 |                    |
+| THD::push_protocol                 : 42         34         sql_class.h:3355    |                    |
+| Prepared_statement::set_parameters : 27         34         sql_prepare.cc:1870 |                    |
+| THD::get_protocol                  : 20         34         sql_prepare.cc:1852 |                    |
+| sp_cache_enforce_limit             : 1          34         sql_prepare.cc:1877 |                    |
+| PROFILING::set_query_source        : 0          34         sql_prepare.cc:1843 |                    |
+| sp_cache_enforce_limit             : 0          34         sql_prepare.cc:1878 |                    |
+
+[33m=====================================================================================================[0m
+test case [mysql_execute_command]
+[ start 10 parallel workers ]
+[ parsed 29646 actions, trace errors: 0 ]
+[ real trace time: 0.01 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [mysql_execute_command]:[0m
+          ns             : cnt        distribution        
+      1024 -> 2047       : 19       |**                  |
+      2048 -> 4095       : 3        |                    |
+      4096 -> 8191       : 0        |                    |
+      8192 -> 16383      : 0        |                    |
+     16384 -> 32767      : 129      |***************     |
+     32768 -> 65535      : 172      |********************|
+     65536 -> 131071     : 44       |*****               |
+    131072 -> 262143     : 33       |***                 |
+    262144 -> 524287     : 23       |**                  |
+    524288 -> 1048575    : 10       |*                   |
+trace count: 433, average latency: 82532 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [mysql_execute_command]:[0m
+                   name                : avg        cnt        call_line          distribution (total) 
+| Sql_cmd_dml::execute                 : 85134      389        sql_parse.cc:4669 |********************|
+| trans_commit                         : 34764      22         sql_parse.cc:4203 |                    |
+| close_thread_tables                  : 1112       433        sql_parse.cc:4893 |                    |
+| MDL_context::release_transactional_l
+    ocks                               : 1083       22         sql_parse.cc:4228 |                    |
+| trans_commit_stmt                    : 841        433        sql_parse.cc:4876 |                    |
+| Query_expression::cleanup            : 681        433        sql_lex.h:4304    |                    |
+| *self                                : 353        433        -                 |                    |
+| trans_begin                          : 325        22         sql_parse.cc:4191 |                    |
+| open_temporary_tables                : 144        389        sql_parse.cc:3306 |                    |
+| MDL_context::release_statement_locks : 130        411        sql_parse.cc:4935 |                    |
+| gtid_pre_statement_checks            : 89         433        sql_parse.cc:3184 |                    |
+| Opt_trace_start::Opt_trace_start     : 87         433        sql_parse.cc:3173 |                    |
+| mysql_event_tracking_query_notify    : 86         433        sql_parse.cc:3231 |                    |
+| Prepared_statement::trace_parameter_
+    types                              : 85         389        sql_parse.cc:3179 |                    |
+| THD::Query_plan::set_query_plan      : 84         433        sql_parse.cc:4855 |                    |
+| THD::Query_plan::set_query_plan      : 79         433        sql_parse.cc:3311 |                    |
+| mysql_event_tracking_query_notify    : 67         433        sql_parse.cc:4862 |                    |
+| gtid_pre_statement_post_implicit_com
+    mit_checks                         : 62         433        sql_parse.cc:3229 |                    |
+| MDL_context::release_transactional_l
+    ocks                               : 57         22         sql_parse.cc:4931 |                    |
+| Diagnostics_area::reset_condition_in
+    fo                                 : 50         22         sql_parse.cc:2989 |                    |
+| launch_hook_trans_begin              : 48         433        sql_parse.cc:3151 |                    |
+| trans_reset_one_shot_chistics        : 45         22         sql_parse.cc:4235 |                    |
+| is_explainable_query                 : 37         433        sql_parse.cc:4846 |                    |
+| MYSQL_BIN_LOG::gtid_end_transaction  : 36         22         sql_parse.cc:2872 |                    |
+| Opt_trace_start::~Opt_trace_start    : 35         433        sql_parse.cc:3173 |                    |
+| THD::enter_stage                     : 35         433        sql_parse.cc:4892 |                    |
+| my_ok                                : 29         44         sql_parse.cc:4815 |                    |
+| THD::get_protocol                    : 28         433        sql_parse.cc:3043 |                    |
+| THD::enter_stage                     : 23         433        sql_parse.cc:4828 |                    |
+| LEX::first_lists_tables_same         : 20         433        sql_parse.cc:2973 |                    |
+| Transaction_state_tracker::clear_trx
+    _state                             : 17         433        sql_parse.cc:4947 |                    |
+| THD::get_protocol                    : 15         433        sql_parse.cc:3294 |                    |
+| stmt_causes_implicit_commit          : 12         411        sql_parse.cc:2868 |                    |
+| Transaction_state_tracker::add_trx_s
+    tate_from_thd                      : 10         433        sql_parse.cc:4944 |                    |
+| stmt_causes_implicit_commit          : 9          433        sql_parse.cc:4911 |                    |
+| stmt_causes_implicit_commit          : 8          433        sql_parse.cc:3205 |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 6          433        sql_parse.cc:2980 |                    |
+| check_readonly                       : 5          433        sql_parse.cc:1493 |                    |
+| Protocol_text::type                  : 3          22         sql_parse.cc:3294 |                    |
+| Session_tracker::get_tracker         : 3          433        sql_parse.cc:4941 |                    |
+| THD::rollback_item_tree_changes      : 2          433        sql_parse.cc:4896 |                    |
+| Protocol_binary::type                : 1          411        sql_parse.cc:3294 |                    |
+| command_satisfy_acl_cache_requiremen
+    t                                  : 0          433        sql_parse.cc:3319 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [mysql_execute_command]
+           called from [Prepared_statement::execute(sql_parse.cc:5010)]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 129      |***************     |
+     32768 -> 65535      : 172      |********************|
+     65536 -> 131071     : 44       |*****               |
+    131072 -> 262143     : 33       |***                 |
+    262144 -> 524287     : 23       |**                  |
+    524288 -> 1048575    : 10       |*                   |
+trace count: 411, average latency: 86855 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [mysql_execute_command]
+                             called from [Prepared_statement::execute(sql_parse.cc:5010)]:[0m
+                   name                : avg        cnt        call_line          distribution (total) 
+| Sql_cmd_dml::execute                 : 85134      389        sql_parse.cc:4669 |********************|
+| trans_commit                         : 34764      22         sql_parse.cc:4203 |                    |
+| close_thread_tables                  : 1169       411        sql_parse.cc:4893 |                    |
+| MDL_context::release_transactional_l
+    ocks                               : 1083       22         sql_parse.cc:4228 |                    |
+| trans_commit_stmt                    : 880        411        sql_parse.cc:4876 |                    |
+| Query_expression::cleanup            : 709        411        sql_lex.h:4304    |                    |
+| *self                                : 362        411        -                 |                    |
+| open_temporary_tables                : 144        389        sql_parse.cc:3306 |                    |
+| MDL_context::release_statement_locks : 137        389        sql_parse.cc:4935 |                    |
+| gtid_pre_statement_checks            : 90         411        sql_parse.cc:3184 |                    |
+| mysql_event_tracking_query_notify    : 88         411        sql_parse.cc:3231 |                    |
+| Opt_trace_start::Opt_trace_start     : 88         411        sql_parse.cc:3173 |                    |
+| THD::Query_plan::set_query_plan      : 86         411        sql_parse.cc:4855 |                    |
+| Prepared_statement::trace_parameter_
+    types                              : 85         389        sql_parse.cc:3179 |                    |
+| THD::Query_plan::set_query_plan      : 78         411        sql_parse.cc:3311 |                    |
+| mysql_event_tracking_query_notify    : 70         411        sql_parse.cc:4862 |                    |
+| gtid_pre_statement_post_implicit_com
+    mit_checks                         : 60         411        sql_parse.cc:3229 |                    |
+| MDL_context::release_transactional_l
+    ocks                               : 57         22         sql_parse.cc:4931 |                    |
+| trans_reset_one_shot_chistics        : 45         22         sql_parse.cc:4235 |                    |
+| launch_hook_trans_begin              : 39         411        sql_parse.cc:3151 |                    |
+| is_explainable_query                 : 38         411        sql_parse.cc:4846 |                    |
+| MYSQL_BIN_LOG::gtid_end_transaction  : 36         22         sql_parse.cc:2872 |                    |
+| Opt_trace_start::~Opt_trace_start    : 36         411        sql_parse.cc:3173 |                    |
+| THD::enter_stage                     : 36         411        sql_parse.cc:4892 |                    |
+| my_ok                                : 31         22         sql_parse.cc:4815 |                    |
+| THD::get_protocol                    : 28         411        sql_parse.cc:3043 |                    |
+| THD::enter_stage                     : 22         411        sql_parse.cc:4828 |                    |
+| LEX::first_lists_tables_same         : 20         411        sql_parse.cc:2973 |                    |
+| Transaction_state_tracker::clear_trx
+    _state                             : 18         411        sql_parse.cc:4947 |                    |
+| THD::get_protocol                    : 14         411        sql_parse.cc:3294 |                    |
+| stmt_causes_implicit_commit          : 11         389        sql_parse.cc:2868 |                    |
+| Transaction_state_tracker::add_trx_s
+    tate_from_thd                      : 10         411        sql_parse.cc:4944 |                    |
+| stmt_causes_implicit_commit          : 8          411        sql_parse.cc:4911 |                    |
+| stmt_causes_implicit_commit          : 8          411        sql_parse.cc:3205 |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 6          411        sql_parse.cc:2980 |                    |
+| check_readonly                       : 4          411        sql_parse.cc:1493 |                    |
+| Session_tracker::get_tracker         : 3          411        sql_parse.cc:4941 |                    |
+| THD::rollback_item_tree_changes      : 2          411        sql_parse.cc:4896 |                    |
+| Protocol_binary::type                : 1          411        sql_parse.cc:3294 |                    |
+| command_satisfy_acl_cache_requiremen
+    t                                  : 0          411        sql_parse.cc:3319 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [mysql_execute_command]
+           called from [dispatch_sql_command(sql_parse.cc:5010)]:[0m
+          ns             : cnt        distribution        
+      1024 -> 2047       : 19       |********************|
+      2048 -> 4095       : 3        |***                 |
+trace count: 22, average latency: 1766 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [mysql_execute_command]
+                             called from [dispatch_sql_command(sql_parse.cc:5010)]:[0m
+                   name                : avg        cnt        call_line          distribution (total) 
+| trans_begin                          : 325        22         sql_parse.cc:4191 |********************|
+| launch_hook_trans_begin              : 227        22         sql_parse.cc:3151 |**************      |
+| *self                                : 178        22         -                 |**********          |
+| Query_expression::cleanup            : 162        22         sql_lex.h:4304    |**********          |
+| trans_commit_stmt                    : 104        22         sql_parse.cc:4876 |******              |
+| THD::Query_plan::set_query_plan      : 98         22         sql_parse.cc:3311 |******              |
+| gtid_pre_statement_post_implicit_com
+    mit_checks                         : 85         22         sql_parse.cc:3229 |*****               |
+| Opt_trace_start::Opt_trace_start     : 70         22         sql_parse.cc:3173 |****                |
+| gtid_pre_statement_checks            : 58         22         sql_parse.cc:3184 |***                 |
+| Diagnostics_area::reset_condition_in
+    fo                                 : 50         22         sql_parse.cc:2989 |***                 |
+| THD::Query_plan::set_query_plan      : 49         22         sql_parse.cc:4855 |***                 |
+| THD::enter_stage                     : 40         22         sql_parse.cc:4828 |**                  |
+| close_thread_tables                  : 36         22         sql_parse.cc:4893 |**                  |
+| mysql_event_tracking_query_notify    : 36         22         sql_parse.cc:3231 |**                  |
+| THD::get_protocol                    : 26         22         sql_parse.cc:3043 |*                   |
+| my_ok                                : 26         22         sql_parse.cc:4815 |*                   |
+| check_readonly                       : 21         22         sql_parse.cc:1493 |*                   |
+| THD::enter_stage                     : 20         22         sql_parse.cc:4892 |*                   |
+| THD::get_protocol                    : 17         22         sql_parse.cc:3294 |*                   |
+| LEX::first_lists_tables_same         : 17         22         sql_parse.cc:2973 |*                   |
+| MDL_context::release_statement_locks : 15         22         sql_parse.cc:4935 |                    |
+| Opt_trace_start::~Opt_trace_start    : 15         22         sql_parse.cc:3173 |                    |
+| stmt_causes_implicit_commit          : 15         22         sql_parse.cc:2868 |                    |
+| mysql_event_tracking_query_notify    : 14         22         sql_parse.cc:4862 |                    |
+| stmt_causes_implicit_commit          : 14         22         sql_parse.cc:4911 |                    |
+| Transaction_state_tracker::add_trx_s
+    tate_from_thd                      : 10         22         sql_parse.cc:4944 |                    |
+| is_explainable_query                 : 7          22         sql_parse.cc:4846 |                    |
+| Transaction_state_tracker::clear_trx
+    _state                             : 5          22         sql_parse.cc:4947 |                    |
+| stmt_causes_implicit_commit          : 5          22         sql_parse.cc:3205 |                    |
+| Protocol_text::type                  : 3          22         sql_parse.cc:3294 |                    |
+| THD::rollback_item_tree_changes      : 2          22         sql_parse.cc:4896 |                    |
+| command_satisfy_acl_cache_requiremen
+    t                                  : 0          22         sql_parse.cc:3319 |                    |
+| Session_tracker::get_tracker         : 0          22         sql_parse.cc:4941 |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 0          22         sql_parse.cc:2980 |                    |
+
+[33m======================================================================================================[0m
+test case [open_tables_for_query]
+[ start 10 parallel workers ]
+[ parsed 6758 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [open_tables_for_query]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 361      |********************|
+      4096 -> 8191       : 342      |******************  |
+      8192 -> 16383      : 4        |                    |
+trace count: 707, average latency: 4320 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [open_tables_for_query]:[0m
+             name          : avg        cnt        call_line         distribution (total) 
+| open_tables              : 4221       707        sql_base.cc:6927 |********************|
+| has_external_table       : 64         551        sql_base.cc:6935 |                    |
+| *self                    : 27         707        -                |                    |
+| MDL_ticket_store::front  : 20         707        mdl.h:1478       |                    |
+| MDL_ticket_store::front  : 0          707        mdl.h:1478       |                    |
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [open_tables_for_query]
+           called from [Sql_cmd_dml::execute(sql_base.cc:6962)]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 361      |********************|
+      4096 -> 8191       : 342      |******************  |
+      8192 -> 16383      : 4        |                    |
+trace count: 707, average latency: 4320 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [open_tables_for_query]
+                             called from [Sql_cmd_dml::execute(sql_base.cc:6962)]:[0m
+             name          : avg        cnt        call_line         distribution (total) 
+| open_tables              : 4221       707        sql_base.cc:6927 |********************|
+| has_external_table       : 64         551        sql_base.cc:6935 |                    |
+| *self                    : 27         707        -                |                    |
+| MDL_ticket_store::front  : 20         707        mdl.h:1478       |                    |
+| MDL_ticket_store::front  : 0          707        mdl.h:1478       |                    |
+
+[33m====================================================================================================[0m
+test case [Sql_cmd_dml::execute]
+[ start 10 parallel workers ]
+[ parsed 24330 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [Sql_cmd_dml::execute]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 422      |********************|
+     32768 -> 65535      : 196      |*********           |
+     65536 -> 131071     : 98       |****                |
+    131072 -> 262143     : 52       |**                  |
+    262144 -> 524287     : 44       |**                  |
+trace count: 812, average latency: 70360 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [Sql_cmd_dml::execute]:[0m
+                   name                : avg        cnt        call_line           distribution (total) 
+| Sql_cmd_dml::execute_inner           : 69863      632        sql_select.cc:782  |********************|
+| Sql_cmd_update::execute_inner        : 40285      90         sql_select.cc:782  |*                   |
+| Sql_cmd_delete::execute_inner        : 27289      45         sql_select.cc:782  |                    |
+| Sql_cmd_insert_values::execute_inner : 21189      45         sql_select.cc:782  |                    |
+| open_tables_for_query                : 4315       812        sql_select.cc:726  |*                   |
+| Sql_cmd_insert_base::check_privilege
+    s                                  : 1688       45         sql_select.cc:743  |                    |
+| Sql_cmd_update::check_privileges     : 1655       90         sql_select.cc:743  |                    |
+| Sql_cmd_delete::check_privileges     : 1582       45         sql_select.cc:743  |                    |
+| lock_tables                          : 1536       812        sql_select.cc:778  |                    |
+| Sql_cmd_select::check_privileges     : 1383       632        sql_select.cc:743  |                    |
+| Sql_cmd_insert_base::restore_cmd_pro
+    perties                            : 1017       45         sql_select.cc:742  |                    |
+| Query_expression::restore_cmd_proper
+    ties                               : 788        767        sql_lex.h:4498     |                    |
+| bind_fields                          : 335        767        sql_select.cc:1074 |                    |
+| run_before_dml_hook                  : 160        180        sql_select.cc:765  |                    |
+| *self                                : 146        812        -                  |                    |
+| Query_expression::cleanup            : 127        812        sql_lex.h:4304     |                    |
+| THD::enter_stage                     : 29         812        sql_select.cc:796  |                    |
+| LEX::set_secondary_engine_execution_
+    context                            : 26         812        sql_select.cc:801  |                    |
+| THD::enter_stage                     : 22         812        sql_select.cc:760  |                    |
+| validate_use_secondary_engine        : 12         812        sql_select.cc:753  |                    |
+| Sql_cmd_dml::is_data_change_stmt     : 12         180        sql_select.cc:699  |                    |
+| Query_result_send::cleanup           : 8          632        sql_select.cc:804  |                    |
+| Sql_cmd_dml::is_data_change_stmt     : 7          180        sql_select.cc:765  |                    |
+| Sql_cmd_select::is_data_change_stmt  : 6          632        sql_select.cc:765  |                    |
+| Sql_cmd_select::is_data_change_stmt  : 6          632        sql_select.cc:699  |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [Sql_cmd_dml::execute]
+           called from [mysql_execute_command(sql_select.cc:851)]:[0m
+          ns             : cnt        distribution        
+     16384 -> 32767      : 422      |********************|
+     32768 -> 65535      : 196      |*********           |
+     65536 -> 131071     : 98       |****                |
+    131072 -> 262143     : 52       |**                  |
+    262144 -> 524287     : 44       |**                  |
+trace count: 812, average latency: 70360 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [Sql_cmd_dml::execute]
+                             called from [mysql_execute_command(sql_select.cc:851)]:[0m
+                   name                : avg        cnt        call_line           distribution (total) 
+| Sql_cmd_dml::execute_inner           : 69863      632        sql_select.cc:782  |********************|
+| Sql_cmd_update::execute_inner        : 40285      90         sql_select.cc:782  |*                   |
+| Sql_cmd_delete::execute_inner        : 27289      45         sql_select.cc:782  |                    |
+| Sql_cmd_insert_values::execute_inner : 21189      45         sql_select.cc:782  |                    |
+| open_tables_for_query                : 4315       812        sql_select.cc:726  |*                   |
+| Sql_cmd_insert_base::check_privilege
+    s                                  : 1688       45         sql_select.cc:743  |                    |
+| Sql_cmd_update::check_privileges     : 1655       90         sql_select.cc:743  |                    |
+| Sql_cmd_delete::check_privileges     : 1582       45         sql_select.cc:743  |                    |
+| lock_tables                          : 1536       812        sql_select.cc:778  |                    |
+| Sql_cmd_select::check_privileges     : 1383       632        sql_select.cc:743  |                    |
+| Sql_cmd_insert_base::restore_cmd_pro
+    perties                            : 1017       45         sql_select.cc:742  |                    |
+| Query_expression::restore_cmd_proper
+    ties                               : 788        767        sql_lex.h:4498     |                    |
+| bind_fields                          : 335        767        sql_select.cc:1074 |                    |
+| run_before_dml_hook                  : 160        180        sql_select.cc:765  |                    |
+| *self                                : 146        812        -                  |                    |
+| Query_expression::cleanup            : 127        812        sql_lex.h:4304     |                    |
+| THD::enter_stage                     : 29         812        sql_select.cc:796  |                    |
+| LEX::set_secondary_engine_execution_
+    context                            : 26         812        sql_select.cc:801  |                    |
+| THD::enter_stage                     : 22         812        sql_select.cc:760  |                    |
+| validate_use_secondary_engine        : 12         812        sql_select.cc:753  |                    |
+| Sql_cmd_dml::is_data_change_stmt     : 12         180        sql_select.cc:699  |                    |
+| Query_result_send::cleanup           : 8          632        sql_select.cc:804  |                    |
+| Sql_cmd_dml::is_data_change_stmt     : 7          180        sql_select.cc:765  |                    |
+| Sql_cmd_select::is_data_change_stmt  : 6          632        sql_select.cc:765  |                    |
+| Sql_cmd_select::is_data_change_stmt  : 6          632        sql_select.cc:699  |                    |
+
+[33m======================================================================================================[0m
+test case [row_search_mvcc]
+[ start 10 parallel workers ]
+[ parsed 300676 actions, trace errors: 0 ]
+[ real trace time: 0.01 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_search_mvcc]:[0m
+          ns             : cnt        distribution        
+        16 -> 31         : 707      |**                  |
+        32 -> 63         : 1161     |****                |
+        64 -> 127        : 5446     |********************|
+       128 -> 255        : 716      |**                  |
+       256 -> 511        : 219      |                    |
+       512 -> 1023       : 178      |                    |
+      1024 -> 2047       : 515      |*                   |
+      2048 -> 4095       : 730      |**                  |
+      4096 -> 8191       : 279      |*                   |
+      8192 -> 16383      : 18       |                    |
+     16384 -> 32767      : 5        |                    |
+trace count: 9974, average latency: 545 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_search_mvcc]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_vers_build_for_consistent_read   : 4483       4          row0sel.cc:3079 |                    |
+| btr_cur_search_to_nth_level          : 2078       429        btr0pcur.h:617  |********************|
+| lock_table                           : 1154       75         row0sel.cc:4828 |*                   |
+| sel_set_rec_lock                     : 851        75         row0sel.cc:5228 |*                   |
+| trx_assign_read_view                 : 530        354        row0sel.cc:4822 |****                |
+| mem_heap_block_free                  : 499        4          mem0mem.ic:239  |                    |
+| sel_restore_position_for_mysql       : 285        1354       row0sel.cc:4848 |********            |
+| row_sel_store_mysql_rec              : 211        471        row0sel.cc:5699 |**                  |
+| btr_pcur_t::store_position           : 166        251        row0sel.cc:5185 |                    |
+| btr_pcur_t::store_position           : 136        18         row0sel.cc:5873 |                    |
+| mtr_t::commit                        : 112        1783       row0sel.cc:5971 |****                |
+| row_sel_store_mysql_rec              : 92         9672       row0sel.cc:5612 |******************* |
+| btr_pcur_t::store_position           : 83         1514       row0sel.cc:5740 |**                  |
+| *self                                : 76         9974       -               |*****************   |
+| rec_get_offsets                      : 56         10394      row0sel.cc:5099 |*************       |
+| cmp_dtuple_rec                       : 45         577        row0sel.cc:5132 |                    |
+| row_sel_copy_cached_field_for_mysql  : 32         12398      row0sel.cc:3604 |********            |
+| mtr_t::start                         : 30         1783       row0sel.cc:4631 |*                   |
+| trx_kill_blocking                    : 18         1783       row0sel.cc:5976 |                    |
+| trx_start_if_not_started_xa_low      : 14         1783       trx0trx.h:1305  |                    |
+| thd_is_query_block                   : 13         75         row0sel.cc:4771 |                    |
+| btr_pcur_t::move_to_next             : 12         10292      row0sel.cc:5867 |**                  |
+| que_thr_stop_for_mysql_no_error      : 11         1783       row0sel.cc:5969 |                    |
+| memcpy@plt                           : 11         1992       ut0mem.ic:44    |                    |
+| que_thr_move_to_run_state_for_mysql  : 9          1783       row0sel.cc:4796 |                    |
+| trx_is_interrupted                   : 7          10710      row0sel.cc:4936 |*                   |
+| lock_clust_rec_cons_read_sees        : 7          10068      row0sel.cc:5314 |*                   |
+| lob::undo_vers_t::reset              : 5          9974       row0mysql.h:855 |*                   |
+| lob::undo_vers_t::reset              : 5          10710      row0mysql.h:855 |*                   |
+| mem_heap_free_block_free             : 3          4          mem0mem.ic:278  |                    |
+| mtr_t::~mtr_t                        : 3          9974       row0sel.cc:4455 |                    |
+| row_prebuilt_t::can_prefetch_records : 3          9747       row0sel.cc:5576 |                    |
+| MVCC::is_view_active                 : 2          10068      trx0trx.ic:243  |                    |
+| row_sel_enqueue_cache_row_for_mysql  : 0          8371       row0sel.cc:5666 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_search_mvcc]
+           called from [ha_innobase::general_fetch(row0sel.cc:6055)]:[0m
+          ns             : cnt        distribution        
+        16 -> 31         : 707      |**                  |
+        32 -> 63         : 1161     |****                |
+        64 -> 127        : 5446     |********************|
+       128 -> 255        : 716      |**                  |
+       256 -> 511        : 219      |                    |
+       512 -> 1023       : 178      |                    |
+      1024 -> 2047       : 512      |*                   |
+      2048 -> 4095       : 585      |**                  |
+      4096 -> 8191       : 14       |                    |
+      8192 -> 16383      : 4        |                    |
+     16384 -> 32767      : 3        |                    |
+trace count: 9545, average latency: 353 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_search_mvcc]
+                             called from [ha_innobase::general_fetch(row0sel.cc:6055)]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_vers_build_for_consistent_read   : 4483       4          row0sel.cc:3079 |                    |
+| mem_heap_block_free                  : 499        4          mem0mem.ic:239  |                    |
+| sel_restore_position_for_mysql       : 285        1354       row0sel.cc:4848 |*********           |
+| btr_pcur_t::store_position           : 169        14         row0sel.cc:5873 |                    |
+| row_sel_store_mysql_rec              : 105        297        row0sel.cc:5699 |                    |
+| mtr_t::commit                        : 87         1354       row0sel.cc:5971 |**                  |
+| row_sel_store_mysql_rec              : 86         9421       row0sel.cc:5612 |********************|
+| btr_pcur_t::store_position           : 62         1340       row0sel.cc:5740 |**                  |
+| *self                                : 59         9545       -               |**************      |
+| rec_get_offsets                      : 49         9718       row0sel.cc:5099 |***********         |
+| row_sel_copy_cached_field_for_mysql  : 32         12398      row0sel.cc:3604 |*********           |
+| mtr_t::start                         : 23         1354       row0sel.cc:4631 |                    |
+| memcpy@plt                           : 11         1992       ut0mem.ic:44    |                    |
+| btr_pcur_t::move_to_next             : 10         10013      row0sel.cc:5867 |**                  |
+| que_thr_stop_for_mysql_no_error      : 9          1354       row0sel.cc:5969 |                    |
+| lock_clust_rec_cons_read_sees        : 6          9718       row0sel.cc:5314 |*                   |
+| trx_kill_blocking                    : 5          1354       row0sel.cc:5976 |                    |
+| lob::undo_vers_t::reset              : 5          10006      row0mysql.h:855 |*                   |
+| lob::undo_vers_t::reset              : 5          9545       row0mysql.h:855 |*                   |
+| trx_start_if_not_started_xa_low      : 4          1354       trx0trx.h:1305  |                    |
+| trx_is_interrupted                   : 4          10006      row0sel.cc:4936 |*                   |
+| mem_heap_free_block_free             : 3          4          mem0mem.ic:278  |                    |
+| que_thr_move_to_run_state_for_mysql  : 3          1354       row0sel.cc:4796 |                    |
+| row_prebuilt_t::can_prefetch_records : 2          9421       row0sel.cc:5576 |                    |
+| MVCC::is_view_active                 : 1          9718       trx0trx.ic:243  |                    |
+| mtr_t::~mtr_t                        : 1          9545       row0sel.cc:4455 |                    |
+| row_sel_enqueue_cache_row_for_mysql  : 0          8371       row0sel.cc:5666 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_search_mvcc]
+           called from [ha_innobase::index_read(row0sel.cc:6055)]:[0m
+          ns             : cnt        distribution        
+      1024 -> 2047       : 3        |                    |
+      2048 -> 4095       : 145      |**********          |
+      4096 -> 8191       : 265      |********************|
+      8192 -> 16383      : 14       |*                   |
+     16384 -> 32767      : 2        |                    |
+trace count: 429, average latency: 4798 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_search_mvcc]
+                             called from [ha_innobase::index_read(row0sel.cc:6055)]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| btr_cur_search_to_nth_level          : 2078       429        btr0pcur.h:617  |********************|
+| lock_table                           : 1154       75         row0sel.cc:4828 |*                   |
+| sel_set_rec_lock                     : 851        75         row0sel.cc:5228 |*                   |
+| trx_assign_read_view                 : 530        354        row0sel.cc:4822 |****                |
+| *self                                : 451        429        -               |****                |
+| row_sel_store_mysql_rec              : 391        174        row0sel.cc:5699 |*                   |
+| row_sel_store_mysql_rec              : 292        251        row0sel.cc:5612 |*                   |
+| btr_pcur_t::store_position           : 244        174        row0sel.cc:5740 |                    |
+| mtr_t::commit                        : 190        429        row0sel.cc:5971 |*                   |
+| btr_pcur_t::store_position           : 166        251        row0sel.cc:5185 |                    |
+| rec_get_offsets                      : 154        676        row0sel.cc:5099 |**                  |
+| btr_pcur_t::move_to_next             : 61         279        row0sel.cc:5867 |                    |
+| trx_kill_blocking                    : 57         429        row0sel.cc:5976 |                    |
+| trx_is_interrupted                   : 53         704        row0sel.cc:4936 |                    |
+| mtr_t::start                         : 52         429        row0sel.cc:4631 |                    |
+| trx_start_if_not_started_xa_low      : 47         429        trx0trx.h:1305  |                    |
+| cmp_dtuple_rec                       : 45         577        row0sel.cc:5132 |                    |
+| lock_clust_rec_cons_read_sees        : 33         350        row0sel.cc:5314 |                    |
+| mtr_t::~mtr_t                        : 31         429        row0sel.cc:4455 |                    |
+| que_thr_move_to_run_state_for_mysql  : 29         429        row0sel.cc:4796 |                    |
+| MVCC::is_view_active                 : 27         350        trx0trx.ic:243  |                    |
+| row_prebuilt_t::can_prefetch_records : 26         326        row0sel.cc:5576 |                    |
+| btr_pcur_t::store_position           : 23         4          row0sel.cc:5873 |                    |
+| que_thr_stop_for_mysql_no_error      : 17         429        row0sel.cc:5969 |                    |
+| thd_is_query_block                   : 13         75         row0sel.cc:4771 |                    |
+| lob::undo_vers_t::reset              : 9          704        row0mysql.h:855 |                    |
+| lob::undo_vers_t::reset              : 8          429        row0mysql.h:855 |                    |
+
+[33m======================================================================================================[0m
+test case [rec_get_offsets_func]
+[ start 10 parallel workers ]
+[ parsed 0 actions, trace errors: 0 ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+test case [row_sel_store_mysql_rec]
+[ start 10 parallel workers ]
+[ parsed 107346 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [row_sel_store_mysql_rec]:[0m
+          ns             : cnt        distribution        
+        32 -> 63         : 3499     |*****               |
+        64 -> 127        : 11712    |********************|
+       128 -> 255        : 1728     |**                  |
+       256 -> 511        : 783      |*                   |
+       512 -> 1023       : 74       |                    |
+      1024 -> 2047       : 0        |                    |
+      2048 -> 4095       : 0        |                    |
+      4096 -> 8191       : 2        |                    |
+      8192 -> 16383      : 1        |                    |
+trace count: 17799, average latency: 97 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_sel_store_mysql_rec]:[0m
+              name           : avg        cnt        call_line        distribution (total) 
+| row_sel_store_mysql_field  : 38         35874      row0sel.cc:3025 |********************|
+| *self                      : 20         17799      -               |*****               |
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [row_sel_store_mysql_rec]
+           called from [row_search_mvcc(row0sel.cc:3046)]:[0m
+          ns             : cnt        distribution        
+        32 -> 63         : 3499     |*****               |
+        64 -> 127        : 11712    |********************|
+       128 -> 255        : 1728     |**                  |
+       256 -> 511        : 783      |*                   |
+       512 -> 1023       : 74       |                    |
+      1024 -> 2047       : 0        |                    |
+      2048 -> 4095       : 0        |                    |
+      4096 -> 8191       : 2        |                    |
+      8192 -> 16383      : 1        |                    |
+trace count: 17799, average latency: 97 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_sel_store_mysql_rec]
+                             called from [row_search_mvcc(row0sel.cc:3046)]:[0m
+              name           : avg        cnt        call_line        distribution (total) 
+| row_sel_store_mysql_field  : 38         35874      row0sel.cc:3025 |********************|
+| *self                      : 20         17799      -               |*****               |
+
+[33m====================================================================================================[0m
+test case [Optimize_table_order::choose_table_order]
+[ start 10 parallel workers ]
+[ parsed 3760 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [Optimize_table_order::choose_table_order]:[0m
+          ns             : cnt        distribution        
+        32 -> 63         : 1        |                    |
+        64 -> 127        : 245      |********************|
+       128 -> 255        : 97       |*******             |
+       256 -> 511        : 17       |*                   |
+       512 -> 1023       : 0        |                    |
+      1024 -> 2047       : 128      |**********          |
+      2048 -> 4095       : 17       |*                   |
+trace count: 505, average latency: 585 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [Optimize_table_order::choose_table_order]:[0m
+                   name                : avg        cnt        call_line            distribution (total) 
+| Optimize_table_order::greedy_search  : 1256       145        sql_planner.cc:2030 |********************|
+| Item_func::walk                      : 183        145        sql_planner.cc:2019 |**                  |
+| *self                                : 93         505        -                   |*****               |
+| memcpy@plt                           : 70         360        sql_planner.cc:1963 |**                  |
+| Query_block::reset_nj_counters       : 34         145        sql_planner.cc:1971 |                    |
+| memset@plt                           : 26         145        my_bitmap.h:122     |                    |
+| merge_sort<JOIN_TAB, Join_tab_compar
+    e_default>                         : 22         145        sql_planner.cc:1998 |                    |
+| Optimize_table_order::recalculate_la
+    teral_deps                         : 9          145        sql_planner.cc:2023 |                    |
+| Optimize_table_order::fix_semijoin_s
+    trategies                          : 7          145        sql_planner.cc:2041 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [Optimize_table_order::choose_table_order]
+           called from [JOIN::make_join_plan(sql_planner.cc:2044)]:[0m
+          ns             : cnt        distribution        
+        32 -> 63         : 1        |                    |
+        64 -> 127        : 245      |********************|
+       128 -> 255        : 97       |*******             |
+       256 -> 511        : 17       |*                   |
+trace count: 360, average latency: 125 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [Optimize_table_order::choose_table_order]
+                             called from [JOIN::make_join_plan(sql_planner.cc:2044)]:[0m
+      name   : avg        cnt        call_line            distribution (total) 
+| memcpy@plt : 70         360        sql_planner.cc:1963 |********************|
+| *self      : 55         360        -                   |***************     |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [Optimize_table_order::choose_table_order]
+           called from [JOIN::make_join_plan(sql_planner.cc:2044)]:[0m
+          ns             : cnt        distribution        
+      1024 -> 2047       : 128      |********************|
+      2048 -> 4095       : 17       |**                  |
+trace count: 145, average latency: 1727 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [Optimize_table_order::choose_table_order]
+                             called from [JOIN::make_join_plan(sql_planner.cc:2044)]:[0m
+                   name                : avg        cnt        call_line            distribution (total) 
+| Optimize_table_order::greedy_search  : 1256       145        sql_planner.cc:2030 |********************|
+| *self                                : 188        145        -                   |**                  |
+| Item_func::walk                      : 183        145        sql_planner.cc:2019 |**                  |
+| Query_block::reset_nj_counters       : 34         145        sql_planner.cc:1971 |                    |
+| memset@plt                           : 26         145        my_bitmap.h:122     |                    |
+| merge_sort<JOIN_TAB, Join_tab_compar
+    e_default>                         : 22         145        sql_planner.cc:1998 |                    |
+| Optimize_table_order::recalculate_la
+    teral_deps                         : 9          145        sql_planner.cc:2023 |                    |
+| Optimize_table_order::fix_semijoin_s
+    trategies                          : 7          145        sql_planner.cc:2041 |                    |
+
+[33m======================================================================================================[0m
+test case [handler::ha_update_row]
+[ start 10 parallel workers ]
+[ parsed 492 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Child functions's Latency of [handler::ha_update_row]
+                             called from [unknown(-)]:[0m
+               name            : avg        cnt        call_line        distribution (total) 
+| ha_innobase::update_row      : 14486      82         handler.cc:8107 |********************|
+| handler::mark_trx_read_write : 158        82         handler.cc:8100 |                    |
+| binlog_log_row               : WARNING: Return of this child function is not found, you can
+                                  trace its latency by '-f' directly
+
+[33m====================================================================================================[0m
+test case [ha_innobase::update_row]
+[ start 10 parallel workers ]
+[ parsed 1592 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [ha_innobase::update_row]:[0m
+          ns             : cnt        distribution        
+      4096 -> 8191       : 45       |********************|
+      8192 -> 16383      : 0        |                    |
+     16384 -> 32767      : 42       |******************  |
+     32768 -> 65535      : 1        |                    |
+trace count: 88, average latency: 13990 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [ha_innobase::update_row]:[0m
+                   name                : avg        cnt        call_line           distribution (total) 
+| row_update_for_mysql                 : 12776      88         ha_innodb.cc:10089 |********************|
+| calc_row_difference                  : 930        88         ha_innodb.cc:10067 |*                   |
+| srv_active_wake_master_thread_low    : 238        4          srv0srv.h:998      |                    |
+| *self                                : 99         88         -                  |                    |
+| thd_to_trx                           : 66         88         ha_innodb.cc:10017 |                    |
+| convert_error_code_to_mysql          : 61         88         ha_innodb.cc:10147 |                    |
+| row_prebuilt_t::skip_concurrency_tic
+    ket                                : 27         88         ha_innodb.cc:1873  |                    |
+| row_prebuilt_t::skip_concurrency_tic
+    ket                                : 13         88         ha_innodb.cc:1836  |                    |
+| handler::ha_statistic_increment      : 4          88         ha_innodb.cc:10051 |                    |
+| row_upd_get_new_autoinc_counter      : 0          88         ha_innodb.cc:10092 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [ha_innobase::update_row]
+           called from [handler::ha_update_row(ha_innodb.cc:10166)]:[0m
+          ns             : cnt        distribution        
+      4096 -> 8191       : 45       |********************|
+      8192 -> 16383      : 0        |                    |
+     16384 -> 32767      : 42       |******************  |
+     32768 -> 65535      : 1        |                    |
+trace count: 88, average latency: 13990 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [ha_innobase::update_row]
+                             called from [handler::ha_update_row(ha_innodb.cc:10166)]:[0m
+                   name                : avg        cnt        call_line           distribution (total) 
+| row_update_for_mysql                 : 12776      88         ha_innodb.cc:10089 |********************|
+| calc_row_difference                  : 930        88         ha_innodb.cc:10067 |*                   |
+| srv_active_wake_master_thread_low    : 238        4          srv0srv.h:998      |                    |
+| *self                                : 99         88         -                  |                    |
+| thd_to_trx                           : 66         88         ha_innodb.cc:10017 |                    |
+| convert_error_code_to_mysql          : 61         88         ha_innodb.cc:10147 |                    |
+| row_prebuilt_t::skip_concurrency_tic
+    ket                                : 27         88         ha_innodb.cc:1873  |                    |
+| row_prebuilt_t::skip_concurrency_tic
+    ket                                : 13         88         ha_innodb.cc:1836  |                    |
+| handler::ha_statistic_increment      : 4          88         ha_innodb.cc:10051 |                    |
+| row_upd_get_new_autoinc_counter      : 0          88         ha_innodb.cc:10092 |                    |
+
+[33m======================================================================================================[0m
+test case [row_upd_step]
+[ start 10 parallel workers ]
+[ parsed 1494 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_upd_step]:[0m
+          ns             : cnt        distribution        
+      4096 -> 8191       : 44       |********************|
+      8192 -> 16383      : 35       |***************     |
+     16384 -> 32767      : 38       |*****************   |
+     32768 -> 65535      : 1        |                    |
+trace count: 118, average latency: 10971 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_upd_step]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_upd_sec_index_entry_low          : 6384       79         row0upd.cc:2411 |*************       |
+| row_upd_clust_step                   : 6345       118        row0upd.cc:3187 |********************|
+| row_upd_changes_ord_field_binary_fun
+    c                                  : 183        39         row0upd.h:290   |                    |
+| *self                                : 156        118        -               |                    |
+| mem_heap_block_free                  : 97         118        mem0mem.ic:239  |                    |
+| row_upd_changes_some_index_ord_field
+    _binary                            : 30         78         row0upd.cc:3173 |                    |
+| trx_start_if_not_started_low         : 16         118        trx0trx.h:1293  |                    |
+| mem_heap_free_block_free             : 0          79         mem0mem.ic:278  |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_upd_step]
+           called from [row_update_for_mysql_using_upd_graph(row0upd.cc:3342)]:[0m
+          ns             : cnt        distribution        
+      4096 -> 8191       : 44       |********************|
+      8192 -> 16383      : 35       |***************     |
+     16384 -> 32767      : 38       |*****************   |
+     32768 -> 65535      : 1        |                    |
+trace count: 118, average latency: 10971 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_upd_step]
+                             called from [row_update_for_mysql_using_upd_graph(row0upd.cc:3342)]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_upd_sec_index_entry_low          : 6384       79         row0upd.cc:2411 |*************       |
+| row_upd_clust_step                   : 6345       118        row0upd.cc:3187 |********************|
+| row_upd_changes_ord_field_binary_fun
+    c                                  : 183        39         row0upd.h:290   |                    |
+| *self                                : 156        118        -               |                    |
+| mem_heap_block_free                  : 97         118        mem0mem.ic:239  |                    |
+| row_upd_changes_some_index_ord_field
+    _binary                            : 30         78         row0upd.cc:3173 |                    |
+| trx_start_if_not_started_low         : 16         118        trx0trx.h:1293  |                    |
+| mem_heap_free_block_free             : 0          79         mem0mem.ic:278  |                    |
+
+[33m======================================================================================================[0m
+test case [row_upd_clust_step]
+[ start 10 parallel workers ]
+[ parsed 2000 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_upd_clust_step]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 1        |                    |
+      4096 -> 8191       : 78       |********************|
+      8192 -> 16383      : 40       |**********          |
+     16384 -> 32767      : 1        |                    |
+trace count: 120, average latency: 6515 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_upd_clust_step]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_upd_clust_rec                    : 7495       40         row0upd.cc:3128 |********************|
+| row_upd_clust_rec                    : 4213       40         row0upd.cc:3099 |***********         |
+| btr_cur_del_mark_set_clust_rec       : 2780       40         row0upd.cc:2968 |*******             |
+| row_upd_store_row                    : 1591       40         row0upd.cc:3103 |****                |
+| row_upd_store_row                    : 871        40         row0upd.cc:2962 |**                  |
+| btr_pcur_t::restore_position         : 499        120        row0upd.cc:3048 |***                 |
+| mtr_t::commit                        : 423        40         row0upd.cc:2978 |*                   |
+| rec_get_offsets                      : 92         120        row0upd.cc:3059 |                    |
+| mtr_t::start                         : 63         120        row0upd.cc:3010 |                    |
+| row_upd_changes_ord_field_binary_fun
+    c                                  : 50         40         row0upd.h:290   |                    |
+| *self                                : 22         120        -               |                    |
+| row_upd_index_is_referenced          : 21         120        row0upd.cc:3004 |                    |
+| mtr_t::~mtr_t                        : 7          120        row0upd.cc:2993 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [row_upd_clust_step]
+           called from [row_upd_step(row0upd.cc:3144)]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 1        |                    |
+      4096 -> 8191       : 78       |********************|
+      8192 -> 16383      : 40       |**********          |
+     16384 -> 32767      : 1        |                    |
+trace count: 120, average latency: 6515 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_upd_clust_step]
+                             called from [row_upd_step(row0upd.cc:3144)]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_upd_clust_rec                    : 7495       40         row0upd.cc:3128 |********************|
+| row_upd_clust_rec                    : 4213       40         row0upd.cc:3099 |***********         |
+| btr_cur_del_mark_set_clust_rec       : 2780       40         row0upd.cc:2968 |*******             |
+| row_upd_store_row                    : 1591       40         row0upd.cc:3103 |****                |
+| row_upd_store_row                    : 871        40         row0upd.cc:2962 |**                  |
+| btr_pcur_t::restore_position         : 499        120        row0upd.cc:3048 |***                 |
+| mtr_t::commit                        : 423        40         row0upd.cc:2978 |*                   |
+| rec_get_offsets                      : 92         120        row0upd.cc:3059 |                    |
+| mtr_t::start                         : 63         120        row0upd.cc:3010 |                    |
+| row_upd_changes_ord_field_binary_fun
+    c                                  : 50         40         row0upd.h:290   |                    |
+| *self                                : 22         120        -               |                    |
+| row_upd_index_is_referenced          : 21         120        row0upd.cc:3004 |                    |
+| mtr_t::~mtr_t                        : 7          120        row0upd.cc:2993 |                    |
+
+[33m======================================================================================================[0m
+test case [row_upd_clust_rec]
+[ start 10 parallel workers ]
+[ parsed 566 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [row_upd_clust_rec]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 36       |******************  |
+      4096 -> 8191       : 38       |********************|
+      8192 -> 16383      : 2        |*                   |
+     16384 -> 32767      : 5        |**                  |
+trace count: 81, average latency: 6314 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_upd_clust_rec]:[0m
+                 name              : avg        cnt        call_line        distribution (total) 
+| btr_cur_optimistic_update        : 5777       81         row0upd.cc:2837 |********************|
+| mtr_t::commit                    : 466        81         row0upd.cc:2914 |*                   |
+| *self                            : 63         81         -               |                    |
+| row_upd_get_new_autoinc_counter  : 13         40         row0upd.cc:2747 |                    |
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [row_upd_clust_rec]
+           called from [row_upd_clust_step(row0upd.cc:2932)]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 36       |******************  |
+      4096 -> 8191       : 38       |********************|
+      8192 -> 16383      : 2        |*                   |
+     16384 -> 32767      : 5        |**                  |
+trace count: 81, average latency: 6314 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [row_upd_clust_rec]
+                             called from [row_upd_clust_step(row0upd.cc:2932)]:[0m
+                 name              : avg        cnt        call_line        distribution (total) 
+| btr_cur_optimistic_update        : 5777       81         row0upd.cc:2837 |********************|
+| mtr_t::commit                    : 466        81         row0upd.cc:2914 |*                   |
+| *self                            : 63         81         -               |                    |
+| row_upd_get_new_autoinc_counter  : 13         40         row0upd.cc:2747 |                    |
+
+[33m====================================================================================================[0m
+test case [btr_cur_optimistic_update]
+[ start 10 parallel workers ]
+[ parsed 720 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [unknown(-)]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 162        120        btr0cur.cc:3545 |********************|
+| rec_get_offsets                      : 111        120        btr0cur.cc:3535 |*************       |
+| btr_cur_update_in_place              : WARNING: Return of this child function is not found, you can
+                                          trace its latency by '-f' directly
+
+[33m====================================================================================================[0m
+test case [btr_cur_update_in_place]
+[ start 10 parallel workers ]
+[ parsed 812 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [btr_cur_update_in_place]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 56       |********************|
+      4096 -> 8191       : 27       |*********           |
+      8192 -> 16383      : 0        |                    |
+     16384 -> 32767      : 4        |*                   |
+trace count: 87, average latency: 5136 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [btr_cur_update_in_place]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| trx_undo_report_row_operation        : 4190       87         btr0cur.cc:3120 |********************|
+| lock_clust_rec_modify_check_and_lock : 578        29         btr0cur.cc:3111 |                    |
+| btr_cur_update_in_place_log          : 542        87         btr0cur.cc:3415 |**                  |
+| row_upd_rec_in_place                 : 122        87         btr0cur.cc:3413 |                    |
+| *self                                : 87         87         -               |                    |
+| lob::BtrContext::unmark_extern_field
+    s                                  : 3          29         btr0cur.cc:3423 |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [btr_cur_update_in_place]
+           called from [row_upd_clust_rec(btr0cur.cc:3436)]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 29       |********************|
+      4096 -> 8191       : 25       |*****************   |
+      8192 -> 16383      : 0        |                    |
+     16384 -> 32767      : 4        |**                  |
+trace count: 58, average latency: 5777 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [btr_cur_update_in_place]
+                             called from [row_upd_clust_rec(btr0cur.cc:3436)]:[0m
+                name             : avg        cnt        call_line        distribution (total) 
+| trx_undo_report_row_operation  : 5082       58         btr0cur.cc:3120 |********************|
+| btr_cur_update_in_place_log    : 531        58         btr0cur.cc:3415 |**                  |
+| row_upd_rec_in_place           : 91         58         btr0cur.cc:3413 |                    |
+| *self                          : 72         58         -               |                    |
+
+[33m======================================================================================================[0m
+[32mHistogram - Latency of [btr_cur_update_in_place]
+           called from [row_ins_clust_index_entry_low(btr0cur.cc:3436)]:[0m
+          ns             : cnt        distribution        
+      2048 -> 4095       : 27       |********************|
+      4096 -> 8191       : 2        |*                   |
+trace count: 29, average latency: 3853 ns
+
+[33m------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [btr_cur_update_in_place]
+                             called from [row_ins_clust_index_entry_low(btr0cur.cc:3436)]:[0m
+                   name                : avg        cnt        call_line        distribution (total) 
+| trx_undo_report_row_operation        : 2404       29         btr0cur.cc:3120 |********************|
+| lock_clust_rec_modify_check_and_lock : 578        29         btr0cur.cc:3111 |****                |
+| btr_cur_update_in_place_log          : 565        29         btr0cur.cc:3415 |****                |
+| row_upd_rec_in_place                 : 184        29         btr0cur.cc:3413 |*                   |
+| *self                                : 117        29         -               |                    |
+| lob::BtrContext::unmark_extern_field
+    s                                  : 3          29         btr0cur.cc:3423 |                    |
+
+[33m======================================================================================================[0m
+test case [log_writer]
+[ start 10 parallel workers ]
+[ parsed 397018 actions, trace errors: 0 ]
+[ real trace time: 0.01 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Child functions's Latency of [log_writer]
+                             called from [unknown(-)]:[0m
+                   name                : avg        cnt        call_line          distribution (total) 
+| log_writer_write_buffer              : 2491       424        log0write.cc:2298 |**                  |
+| os_event_set                         : 2221       1          ut0mutex.ic:224   |                    |
+| std::chrono::_V2::system_clock::now@
+    plt                                : 756        1          log0write.cc:1249 |                    |
+| mutex_enter_inline<PolicyMutex<TTASE
+    ventMutex<GenericPolicy> > >       : 45         1          log0write.cc:2307 |                    |
+| log_advance_ready_for_write_lsn      : 40         198064     log0write.cc:2255 |********************|
+| sync_array_object_signalled          : 19         1          ut0mutex.ic:226   |                    |
+
+[33m====================================================================================================[0m
+test case [os_file_write_page]
+[ start 10 parallel workers ]
+[ parsed 1856 actions, trace errors: 0 ]
+[ real trace time: 0.02 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [os_file_write_page]:[0m
+          ns             : cnt        distribution        
+       512 -> 1023       : 79       |*****               |
+      1024 -> 2047       : 284      |********************|
+      2048 -> 4095       : 85       |*****               |
+      4096 -> 8191       : 7        |                    |
+      8192 -> 16383      : 9        |                    |
+trace count: 464, average latency: 1845 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [os_file_write_page]:[0m
+      name   : avg        cnt        call_line        distribution (total) 
+| os_file_io : 1759       464        os0file.cc:4953 |********************|
+| *self      : 85         464        -               |                    |
+
+[33m====================================================================================================[0m
+[32mHistogram - Latency of [os_file_write_page]
+           called from [os_file_write_func(os0file.cc:5009)]:[0m
+          ns             : cnt        distribution        
+       512 -> 1023       : 79       |*****               |
+      1024 -> 2047       : 284      |********************|
+      2048 -> 4095       : 85       |*****               |
+      4096 -> 8191       : 7        |                    |
+      8192 -> 16383      : 9        |                    |
+trace count: 464, average latency: 1845 ns
+
+[33m----------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [os_file_write_page]
+                             called from [os_file_write_func(os0file.cc:5009)]:[0m
+      name   : avg        cnt        call_line        distribution (total) 
+| os_file_io : 1759       464        os0file.cc:4953 |********************|
+| *self      : 85         464        -               |                    |
+
+[33m====================================================================================================[0m
