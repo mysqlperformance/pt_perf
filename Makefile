@@ -32,7 +32,7 @@ LIBS = -lpthread
 CXX = g++
 # CXXFLAGS = -g -O0 -fsanitize=address -fno-omit-frame-pointer -std=c++14 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
 ifeq ($(DEBUG), 1)
-CXXFLAGS = -g -O0 -std=c++17 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
+CXXFLAGS = -g -O0 -std=c++17 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS) -DDEBUG
 else
 CXXFLAGS = -g -O3 -std=c++17 $(INCLUDE_DIR) $(LIB_PATH) $(LIBS)
 endif
@@ -40,6 +40,8 @@ endif
 SRC_FILE = $(SRC_DIR)/func_latency.cc \
            $(SRC_DIR)/stat_tools.cc   \
            $(SRC_DIR)/sys_tools.cc    \
+           $(SRC_DIR)/pt_action.cc    \
+           $(SRC_DIR)/pt_linux_perf.cc    \
            $(SRC_DIR)/worker.cc
 OBJS = $(patsubst %.cc,%.o,$(SRC_FILE))
 

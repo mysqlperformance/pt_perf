@@ -88,6 +88,7 @@ public:
     }
   }
   void start(uint32_t size) {
+    printf("[ start %d parallel workers ]\n", size);
     if (!alive) {
       pool_size = size;
       for (size_t i=0; i<pool_size; ++i) {

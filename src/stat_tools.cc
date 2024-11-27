@@ -4,9 +4,23 @@
 #include <assert.h>
 #include <algorithm>
 
+#include "graphs.h"
 #include "stat_tools.h"
 
 using namespace std;
+
+
+const std::string FuncStat::unknown_latency_str = "(unknown latency) ";
+
+static uint32_t global_print_width = 100;
+void print_cross_line(char c) {
+  printf("\n\033[33m");
+  for (int i = 0; i < global_print_width; ++i) printf("%c", c);
+  printf("\033[0m\n");
+}
+void print_title(const char *title) {
+  printf("\033[32m%s\033[0m\n", title);
+}
 
 static void print_stars(uint64_t val, uint64_t val_max, int width)
 {
@@ -200,5 +214,267 @@ void HistogramDist::print() {
       printf("|");
     }
     printf("\n");
+  }
+}
+
+void FuncStat::init_print_width() {
+  uint32_t num = 1;
+  if (opt.offcpu) num += 1;
+  if (opt.call_line) num += 1;
+  if (opt.code_block) num += 1;
+  HistogramBucket hist_b;
+  hist_b.init_key(children.target, [&](const std::string &name,
+        Bucket::Element &el) -> std::string {
+    return funcname_get_name(name);
+  });
+	global_print_width = 100;
+  global_print_width = std::max(HistogramDist::get_print_width(num), global_print_width);
+  global_print_width = std::max(hist_b.get_print_width(num), global_print_width);
+}
+
+void FuncStat::add(Action &action_call, Action &action_return,
+		uint64_t lat_s, LatencyChild &child) {
+  uint64_t lat_t = action_return.ts - action_call.ts;
+  std::string caller = action_return.to->name;
+  if (opt.call_line) {
+    if (opt.ip_filtering) {
+      /* for ipfiltering, action_call is empty */
+      funcname_add_addr(caller, action_return.to->addr);
+    } else {
+      funcname_add_addr(caller, action_call.from->addr);
+    }
+  }
+  if (lat_t < opt.latency_interval.first ||
+			lat_t > opt.latency_interval.second ||
+      action_call.ts < opt.time_interval.first ||
+			action_call.ts > opt.time_interval.second) {
+    return;
+  }
+
+  if (opt.timeline && action_call.ts >= opt.time_start) {
+    timeline_unit_lat += lat_t;
+    if (++timeline_unit == opt.timeline_unit) {
+      // caculate the average for one timeline_unit
+      timeline.push_back({(action_call.ts - opt.time_start) / 1000.0,
+                           timeline_unit_lat / timeline_unit / 1000.0}); // us
+      timeline_unit_lat = timeline_unit = 0;
+    }
+  } else {
+    add_latency(lat_t, lat_s, caller);
+    if (!opt.code_block) {
+      // add latency of target function self
+      child.add_target(TARGET_SELF,
+          lat_t > child.target_total ? lat_t - child.target_total : 0);
+      child.add_sched(TARGET_SELF,
+          lat_s > child.sched_total ? lat_s - child.sched_total : 0);
+    }
+    add_child_latency(child, caller);
+  }
+}
+
+void FuncStat::print_latency(FuncStat::Latency &latency) {
+	/* print latency distribution of target and schedule */
+  HistogramDist hist("ns");
+
+  latency.target.set_val_name("cnt");
+  hist.add_dist(latency.target);
+  if (opt.offcpu) {
+    latency.sched.set_val_name("sched");
+    hist.add_dist(latency.sched);
+  }
+  hist.print();
+
+	/* print summary text of latency */
+  uint64_t target_avg = latency.target.get_avg();
+  uint64_t target_cnt = latency.target.get_count();
+  uint64_t sched_total = latency.sched.get_total();
+  uint64_t sched_cnt = latency.sched.get_count();
+
+  uint32_t width1 =
+    floor(log10(sched_cnt + target_cnt + 1)) + 1;
+  uint32_t width2 =
+    floor(log10(target_avg + 1)) + 1;
+  printf("trace count: %*lu, average latency: %*lu ns\n",
+          width1, target_cnt, width2, target_avg);
+  if (opt.offcpu) {
+    uint64_t sched_avg =
+      target_cnt > 0 ? sched_total / target_cnt : 0;
+    int cpu_pct =
+         100 * ((target_avg - sched_avg) * target_cnt) / opt.trace_time;
+    printf("sched count: %*lu,   sched latency: %*lu ns, cpu percent: %d \%\n",
+          width1, sched_cnt, width2, sched_avg, cpu_pct);
+  }
+}
+
+void FuncStat::print_child(FuncStat::LatencyChild &child) {
+  HistogramBucket hist;
+
+  Bucket oncpu("cpu_pct(%)");
+  Bucket call_line("call_line");
+  hist.init_key(child.target, [&](const std::string &name,
+        Bucket::Element &el) -> std::string {
+    if (name.find(FuncStat::unknown_latency_str) != std::string::npos) {
+      el.err_msg = "WARNING: Return of this child function is not found, "
+                    "you can trace its latency by '-f' directly";
+      return funcname_get_name(
+          name.substr(FuncStat::unknown_latency_str.size(), name.size()));
+    }
+    return funcname_get_name(name);
+  });
+  if (opt.call_line) {
+    // add srcline to all buckets
+    call_line.add_bucket(child.target);
+    int width = 10;
+    call_line.loop_for_element([&](Bucket::Element &el){
+      if (el.name.find(CODE_BLOCK_PREFIX) != string::npos) {
+        // 'code block' latency needs the begin and end address
+        string srcline_from, srcline_to;
+        srcline_map->get(el.name + "_from", srcline_from);
+        srcline_map->get(el.name + "_to", srcline_to);
+        el.val_str = srcline_from + "-" + srcline_to;
+      } else if (el.name == TARGET_SELF) {
+        srcline_map->get(opt.target, el.val_str);
+      } else {
+        srcline_map->get(el.name, el.val_str);
+      }
+      if (el.val_str.size() > width)
+        width = el.val_str.size();
+    });
+    call_line.set_width(width + 1);
+    hist.add_extra_bucket(&call_line);
+  }
+  if (opt.offcpu) {
+    child.sched.set_val_name("sched_time");
+    child.sched.set_count(child.target);
+    hist.add_extra_bucket(&child.sched);
+
+    oncpu.add_bucket(child.target);
+    oncpu.sub_bucket(child.sched);
+    oncpu.set_count(1);
+    oncpu.set_scale(opt.trace_time / 100);
+    hist.add_extra_bucket(&oncpu);
+  }
+
+  hist.print();
+}
+
+void FuncStat::generate_srcline() {
+  // put all callers
+  for (auto it = callers.begin(); it != callers.end(); ++it) {
+    LatencyCaller &caller = it->second;
+    std::string name = it->first;
+    uint64_t addr = funcname_get_addr(name);
+    if (addr > 0) {
+      srcline_map->put(name, addr);
+		}
+    caller.children.target.loop_for_element([&](Bucket::Element &el){
+      uint64_t addr = funcname_get_addr(el.name);
+      if (addr > 0)
+        srcline_map->put(el.name, addr);
+    });
+  }
+  // put all children
+  children.target.loop_for_element([&](Bucket::Element &el){
+    uint64_t addr = funcname_get_addr(el.name);
+    if (addr > 0)
+      srcline_map->put(el.name, addr);
+  });
+  // generate srcline
+  srcline_map->process_address();
+}
+
+void FuncStat::print() {
+  char title[1024];
+
+	init_print_width();
+  if (opt.call_line) {
+    generate_srcline();
+  }
+  bool has_complete_target =
+        (latency.target.get_total() > 0);
+  /* print gathered target function's latency */
+  if (has_complete_target) {
+    print_cross_line('=');
+    snprintf(title, 1024, "Histogram - Latency of [%s]:",
+             opt.target.c_str());
+    print_title(title);
+    print_latency(latency);
+
+    if (opt.offcpu) {
+      printf("sched total: %lu, sched each time: %lu ns\n", sched_count,
+             sched_count > 0 ? (latency.sched.get_total() / sched_count) : 0);
+    }
+    print_cross_line('-');
+
+    /* print child function's latency  */
+    snprintf(title, 1024,
+             "Histogram - Child functions's Latency of [%s]:",
+             opt.target.c_str());
+    print_title(title);
+		print_child(children);
+  }
+
+  for (auto &it : callers) {
+    string caller_name = it.first;
+    auto &caller = it.second;
+    if (opt.call_line) {
+      string srcline;
+      srcline_map->get(caller_name, srcline);
+      caller_name = funcname_get_name(caller_name) + "(" + srcline + ")";
+    }
+		/* no need to show unknown latency if has complete target */
+    if (has_complete_target && it.first == "unknown")
+      continue;
+
+    /* target function's latency from current caller */
+    print_cross_line('=');
+    if (it.first != "unknown") {
+      snprintf(title, 1024, "Histogram - Latency of [%s]\n"
+             								"           called from [%s]:",
+             opt.target.c_str(), caller_name.c_str());
+      print_title(title);
+      print_latency(caller.latency);
+      print_cross_line('-');
+    }
+
+    /* print child function's latency from caller */
+    snprintf(title, 1024,
+             "Histogram - Child functions's Latency of [%s]\n"
+             "                             called from [%s]:",
+             opt.target.c_str(), caller_name.c_str());
+    print_title(title);
+		print_child(caller.children);
+  }
+  print_cross_line('=');
+}
+
+void FuncStat::print_timeline() {
+  graphs::options gopt;
+  gopt.type = graphs::type_braille;
+  gopt.mark = graphs::mark_dot;
+  gopt.style = graphs::style_light;
+  gopt.check = false;
+  gopt.color = graphs::color_default;
+  gopt.xlabel = "x(us)";
+  gopt.ylabel = "y(us)";
+  //gopt.yexponent = true;
+  printf("start_timestamp: %lld\n", opt.time_start);
+  if (timeline.size() > 0)
+    graphs::plot(100, 160, 0, 0, 0, 0, timeline, gopt);
+}
+
+void FuncGlobalStatus::print(size_t thread_num, const std::string &ancestor) {
+  printf("[ real trace time: %0.2f seconds ]\n", real_trace_time());
+
+  if (thread_num)
+    miss.store(miss.load() / thread_num);
+  printf("[ miss trace time: %0.2f seconds ]\n", (double)miss.load() / NSECS_PER_SECS);
+
+  if (ancestor != "") {
+    char title[1024];
+    snprintf(title, 1024,
+        "[ ancestor: %s, call: %llu, return: %llu ]", ancestor.c_str(),
+        ancestor_begin.load(), ancestor_end.load());
+    print_title(title);
   }
 }

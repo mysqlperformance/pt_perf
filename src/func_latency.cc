@@ -9,29 +9,18 @@
 #include <sstream>
 #include <signal.h>
 
-#include "graphs.h"
 #include "stat_tools.h"
 #include "sys_tools.h"
+#include "pt_linux_perf.h"
 #include "func_latency.h"
 
 using namespace std;
 
-static ParallelWorkerPool worker_pool;
-static string trace_error_str = " instruction trace error";
-static const string unknown_latency_str = "(unknown latency) ";
-/* the missing trace time because of the lost data  */
-static atomic<uint64_t> miss_trace_time{0};
-/* the real trace time based on minimum and maximum timestamp of actions */
-static std::pair<uint64_t, uint64_t> real_trace_time = {UINT64_MAX, 0};
-static atomic<uint64_t> ancestor_begin_count{0};
-static atomic<uint64_t> ancestor_end_count{0};
+Param param;
+FuncGlobalStatus gstat;
 /* use to decode source file and line number */
 static SrclineMap srcline_map;
-Param param;
-
-#define CODE_BLOCK_PREFIX  "*code block: "
-#define TARGET_SELF "*self"
-using defer = std::shared_ptr<void>;
+static ParallelWorkerPool worker_pool;
 
 Param::Param() {
   perf_tool = get_current_dir() + "/perf";
@@ -49,9 +38,9 @@ Param::Param() {
   ip_filtering = false;
   func_idx = "#0"; // global symbol
   offcpu = false;
-  srcline = true;
   call_line = true;
   pt_config = "cyc=1";
+  compact_format = true;
 
   ancestor = "";
   ancestor_latency = {0, UINT64_MAX};
@@ -59,9 +48,7 @@ Param::Param() {
 
   timeline = false;
   timeline_unit = 1;
-  sched_funcname = "__schedule";
-  sched_funcname_419 = "__sched_text_start";
-  offcpu_filter = "filter " + sched_funcname +" ,";
+  offcpu_filter = "filter " + sys_sched_funcname +" ,";
   latency_interval = {0, UINT64_MAX};
   time_interval = {0, UINT64_MAX};
   time_start = UINT64_MAX;
@@ -93,10 +80,10 @@ struct option opts[] = {
   {"tu", 1, NULL, '3'},
   {"history", 1, NULL, '2'},
   {"ancestor", 1, NULL, 'a'},
-  {"pt_config", 1, NULL, '6'},
+  {"pt_config", 1, NULL, '5'},
+  {"script_format", 1, NULL, '6'},
   {"code_block", 0, NULL, 'c'},
   {"offcpu", 0, NULL, 'o'},
-  {"srcline", 0, NULL, '5'},
   {"per_thread", 0, NULL, 't'},
   {"ip_filter", 0, NULL, 'i'},
   {"parallel_script", 0, NULL, 's'},
@@ -129,9 +116,7 @@ static void usage() {
     "\t                           eg, 'test#100,200', we shows the result of target function\n"
     "\t                           where its ancestor latency is between 100ns and 200 ns.\n"
     "\t-c / --code_block      --- show the code block latency of target function\n"
-    "\t     --srcline         --- instead of the call line, show the define line of functions\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
-    "\t     --pt_config       --- set config term for intel pt event, currently 'cyc=1' by default\n"
     "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
@@ -151,13 +136,6 @@ static void usage() {
   );
 }
 
-static void clear_record_files() {
-  system("rm -f perf.data");
-}
-
-static void clear_script_files() {
-  system("rm -f script_out*");
-}
 static void sig_handler(int sig) {
   abort_cmd_killable(sig);
   if (param.history < 2)
@@ -177,111 +155,9 @@ static void dump_options() {
       param.latency_interval.first, param.latency_interval.second);
 }
 
-bool SrclineMap::get(const std::string &function, std::string &srcline) {
-  srcline = "-";
-  m_lock.s_lock();
-  defer _(nullptr, [&](...) {m_lock.s_unlock();});
-  auto it = srcline_map.find(function);
-  if (it != srcline_map.end()) {
-    srcline = it->second;
-    return true;
-  }
-  return false;
-}
-
-void SrclineMap::process_address() {
-  m_lock.x_lock();
-  defer _(nullptr, [&](...) {m_lock.x_unlock();});
-  vector<string> func_vec;
-  vector<uint64_t> addr_vec;
-  vector<string> filename_vec;
-  vector<uint> line_nr_vec;
-  for (auto it = addr_map.begin(); it != addr_map.end(); ++it) {
-    func_vec.push_back(it->first);
-    addr_vec.push_back(it->second);
-  }
-  addr2line(param.binary, addr_vec, filename_vec, line_nr_vec);
-  if (filename_vec.size() != addr_vec.size()) {
-    printf("ERROR: addr2line failed !!!");
-    return;
-  }
-  for (size_t i = 0; i < func_vec.size(); ++i) {
-    string &name = func_vec[i];
-    srcline_map[name] = filename_vec[i] + ":" + to_string(line_nr_vec[i]);
-  }
-}
-
-uint64_t SrclineMap::get(const std::string &function) {
-  m_lock.s_lock();
-  defer _(nullptr, [&](...) {m_lock.s_unlock();});
-  auto it = addr_map.find(function);
-  if (it != addr_map.end()) {
-    return it->second;
-  }
-  return 0;
-}
-
-void SrclineMap::put(const std::string &function, uint64_t addr) {
-  m_lock.x_lock();
-  defer _(nullptr, [&](...) {m_lock.x_unlock();});
-  auto it = addr_map.find(function);
-  if (it == addr_map.end()) {
-    addr_map[function] = addr;
-  }
-}
-
-Symbol Action::get_symbol(const string &str, Symbol *caller) {
-  if (str.find("[unknown]") != string::npos) {
-    return {"[unknown]", 0, 0};
-  }
-  
-  std::string name = "";
-  uint64_t addr;
-  uint32_t offset;
-  size_t start, end;
-
-  // address
-  end = str.find_first_of(' ');
-  addr = stoull(str.substr(0, end), nullptr, 16);
-
-  // name
-  start = end + 1;
-  end = str.find_first_of('+', start);
-  name = str.substr(start, end - start);
-
-  // offset
-  start = str.find_last_of('+');
-  end = str.find_first_of(' ', start);
-  if (end == string::npos) end = str.size() - 1;
-  offset = stol(str.substr(start + 1, end-start+1), nullptr, 16);
-  
-  if (param.srcline && static_cast<int64_t>(addr) > 0) {
-    uint64_t func_addr = addr-offset;
-    if (name != param.target && name != param.ancestor) {
-      if (param.call_line) {
-        if (caller) {
-          // show the source line of the call address
-          func_addr = caller->addr;
-        } else {
-          // 'from' symbol has no call address
-          return {name, addr, offset};
-        }
-      }
-      funcname_add_addr(name, func_addr);
-    }
-  }
-  return {name, addr, offset};
-}
-
-static void report_error_action(const string &type, uint32_t id, uint32_t lnum) {
-  if (param.verbose)
-    printf("impletement %s error is detected in action of "
-           "file %d, line %d\n", type.c_str(), id, lnum);
-}
-
 void ThreadJob::do_analyze() {
   vector<Action> stack;
-  Stat::LatencyChild child;
+  FuncStat::LatencyChild child;
 
   // for schedule latency
   uint64_t sched_in_target = 0;
@@ -310,11 +186,20 @@ void ThreadJob::do_analyze() {
 
   /* add one child function latency */
   auto add_one_child = [&](Action *a1, Action *a2, bool unknown = false) {
-    std::string &child_name = a1->to.name;
+    std::string child_name = a1->to->name;
+    /* for "to" symbol, attach call address to
+     * the tail of funcname */
+    if (param.call_line && static_cast<int64_t>(a1->to->addr) > 0
+        && !unknown && child_name != param.target
+        && child_name != param.ancestor) {
+      // show the source line of the call address
+      funcname_add_addr(child_name, a1->from->addr);
+    }
+
     uint64_t lat_t = a2->ts - a1->ts;
     uint64_t lat_s = sched_in_child;
     if (unknown) {
-      child_name = unknown_latency_str + child_name;
+      child_name = FuncStat::unknown_latency_str + child_name;
       lat_t = lat_s = 0;
     }
     child.add_target(child_name, lat_t);
@@ -324,18 +209,18 @@ void ThreadJob::do_analyze() {
 
   /* add code block latency */
   auto add_code_block = [&](Action *a1, Action *a2) {
-    if (a2->from.offset == a1->to.offset) return;
-    std::string child_name = CODE_BLOCK_PREFIX + to_string(a1->to.offset) + "-"
-                   + to_string(a2->from.offset);
+    if (a2->from->offset == a1->to->offset) return;
+    std::string child_name = CODE_BLOCK_PREFIX + to_string(a1->to->offset) + "-"
+                   + to_string(a2->from->offset);
     uint64_t lat_t = a2->ts - a1->ts;
     uint64_t lat_s = sched_in_child;
     child.add_target(child_name, lat_t);
     child.add_sched(child_name, lat_s);
     // set to obtain srcline of code block
     if(!srcline_map.get(child_name + "_from"))
-      srcline_map.put(child_name + "_from", a1->to.addr);
+      srcline_map.put(child_name + "_from", a1->to->addr);
     if(!srcline_map.get(child_name + "_to"))
-      srcline_map.put(child_name + "_to", a2->from.addr);
+      srcline_map.put(child_name + "_to", a2->from->addr);
     assert(lat_t >= lat_s);
     sched_in_child = 0;
     cursor = a2;
@@ -345,13 +230,15 @@ void ThreadJob::do_analyze() {
     Action &action = actions[i];
 
     if (action.is_error) {
-      /* encounter trace error, discard current execution chain */
+      /* encounter trace error, discard current execution chain,
+       * set caller of exist child latency as unknown */
+      stat.add_child_latency(child, "unknown", false);
       clear_context();
       prev_target_error = true;
       continue;
     }
 
-    if (action.to.offset == 0 && action.to_target) {
+    if (action.to->offset == 0 && action.to_target) {
        /* new target function is called, add child function
         * of previous round */
        if (target_begin && stack.size() == 2) {
@@ -372,14 +259,14 @@ void ThreadJob::do_analyze() {
        if (sched_begin) {
          /* ERROR: the schedule in previous round is not finished
           * when the new target is called */
-         report_error_action("schedule begin", sched_begin->id, sched_begin->lnum);
+         report_error_action("schedule begin", sched_begin, param.verbose);
          sched_begin = nullptr;
        }
        if (prev_target_error) {
          /* if error occurs in previous round,
           * calculate the trace missing time */
          if (target_begin)
-           miss_trace_time.fetch_add(action.ts - target_begin->ts);
+           gstat.miss.fetch_add(action.ts - target_begin->ts);
          prev_target_error = false;
        }
        target_begin = &action;
@@ -393,7 +280,7 @@ void ThreadJob::do_analyze() {
         // ancestor begin now
         // clear_context();
         ancestor_begin = &action;
-        ancestor_begin_count.fetch_add(1);
+        gstat.ancestor_begin.fetch_add(1);
         if (param.ancestor_latency.first != 0 ||
             param.ancestor_latency.second != UINT64_MAX) {
           // find the ancestor end in follow actions
@@ -420,7 +307,7 @@ void ThreadJob::do_analyze() {
       } else if (action.ancestor_end) {
         /* ancestor is end */
         ancestor_begin = nullptr;
-        ancestor_end_count.fetch_add(1);
+        gstat.ancestor_end.fetch_add(1);
         continue;
       } else if (!ancestor_begin) {
         /* we only add target function within the ancestor,
@@ -446,12 +333,12 @@ void ThreadJob::do_analyze() {
         sched_begin = nullptr;
       } else {
         /* ERROR: the schedule has not started, but sched_end occurs. */
-        report_error_action("schedule end", action.id, action.lnum);
+        report_error_action("schedule end", &action, param.verbose);
       }
       continue;
     }
 
-    if ((action.type == Action::JMP || action.type == Action::JCC)) {
+    if ((action.type == PT_ACTION_JMP || action.type == PT_ACTION_JCC)) {
       /* change jmp/jcc instruction to call/return */
       if (action.from_target && action.to_target) {
         // internal jump, just add code block latency
@@ -460,54 +347,54 @@ void ThreadJob::do_analyze() {
         continue;
       } else if (action.from_target) {
         // change jmp instruction to call/return
-        if (!action.to.offset) action.type = Action::CALL;
-        else action.type = Action::RETURN;
+        if (!action.to->offset) action.type = PT_ACTION_CALL;
+        else action.type = PT_ACTION_RETURN;
       } else {
         assert(action.to_target);
-        action.type = Action::RETURN;
+        action.type = PT_ACTION_RETURN;
       }
     }
 
     /* process one execution chain */
     switch (action.type) {
-      case Action::TR_START:
+      case PT_ACTION_TR_START:
         /* for ipfiltering, usually means return from child. */
         if (!stack.empty() &&
-          (stack.back().type == Action::TR_END_HW_INT ||
-          stack.back().type == Action::TR_END_CALL)) {
+          (stack.back().type == PT_ACTION_TR_END_HW_INT ||
+          stack.back().type == PT_ACTION_TR_END_CALL)) {
           // this is return to target function from sub function
           add_one_child(&stack.back(), &action);
           stack.pop_back();
-        } else if (!stack.empty() && stack.back().type == Action::TR_END) {
+        } else if (!stack.empty() && stack.back().type == PT_ACTION_TR_END) {
           stack.pop_back();
         } else {
           // wrong chain
           stack.clear();
-          report_error_action("trace", action.id, action.lnum);
+          report_error_action("trace", &action, param.verbose);
         }
         sched_in_child = 0;
         break;
-      case Action::HW_INT:
-      case Action::TR_END_HW_INT:
-      case Action::CALL:
-      case Action::TR_END_SYSCALL:
-      case Action::TR_END_CALL:
+      case PT_ACTION_HW_INT:
+      case PT_ACTION_TR_END_HW_INT:
+      case PT_ACTION_CALL:
+      case PT_ACTION_TR_END_SYSCALL:
+      case PT_ACTION_TR_END_CALL:
         /* this is call to child function */
         if (param.code_block) add_code_block(cursor, &action);
         stack.push_back(action);
         if (sched_begin) {
           /* ERROR: the schedule is not finished when the child function is called */
-          report_error_action("schedule begin in child", sched_begin->id, sched_begin->lnum);
+          report_error_action("schedule begin in child", sched_begin, param.verbose);
           sched_begin = nullptr;
         }
         sched_in_child = 0;
         break;
-      case Action::TR_END:
+      case PT_ACTION_TR_END:
         stack.push_back(action);
         break;
-      case Action::IRET:
-      case Action::RETURN:
-      case Action::TR_END_RETURN:
+      case PT_ACTION_IRET:
+      case PT_ACTION_RETURN:
+      case PT_ACTION_TR_END_RETURN:
         /* return from target function */
         if (stack.size() == 1 && action.from_target && stack[0].to_target) {
           // the execution chain is done
@@ -516,7 +403,7 @@ void ThreadJob::do_analyze() {
           sched_in_target = 0;
           stack.clear();
         } else if (!stack.empty() && stack.back().from_target
-            && action.type != Action::TR_END_RETURN) {
+            && action.type != PT_ACTION_TR_END_RETURN) {
           /* for non-ipfiltering, return to target function from child function */
           add_one_child(&stack.back(), &action);
           stack.pop_back();
@@ -584,417 +471,90 @@ void ThreadJob::extract_actions() {
   assert(actions.size() == total_actions);
 }
 
-static std::vector<std::string> action_type_strs = {
-  "tr strt", "tr end  call", "tr end  return", "tr end  hw int",
-  "tr end  syscall", "tr end", "call", "return", "syscall", "sysret",
-  "jmp", "jcc", "hw int", "iret"
-};
-
 void ParseJob::decode_to_actions() {
-  fstream ifs(filename, std::ios::in | std::ios::out);
-  if (ifs.is_open()) {
-    string line;
-    size_t lnum = 0;
-    while(getline(ifs, line)) {
-      Action action;
-      action.id = id;
-      action.is_error = false;
-      action.from_target = action.to_target = false;
-      if (lnum < from || lnum >= to) {
-        ++lnum;
-        continue;
-      }
-
-      action.lnum = ++lnum;
-      if (!line.compare(0, trace_error_str.size(),
-              trace_error_str, 0, trace_error_str.size())) {
-        if (line.find("Lost trace data") == string::npos) {
-          continue;
-        }
-        // action implies the trace data lost
-        action.is_error = true;
-        size_t start = line.find("tid") + 3;
-        size_t end = line.find("ip");
-        action.tid = stol(line.substr(start, end - start));
-
-        start = line.find("time") + 4;
-        end = line.find_first_of('.', start);
-        long sec = stol(line.substr(start, end - start));
-        start = end + 1;
-        end = line.find("cpu");
-        long nsec = stol(line.substr(start, end - start));
-        action.ts = sec * NSECS_PER_SECS + nsec;
-
-        add_error_action(action);
-        //if (param.verbose)
-        //  printf("Thread %d lost data at timestamp %lld\n", action.tid, action.ts);
-        continue;
-      }
-
-      /* action thread */
-      size_t start = 0;
-      size_t end = line.find_first_of('[', start);
-      long tid = stol(line.substr(start, end - start));
-      action.tid = tid;
-
-      /* action cpu */
-      start = end + 1;
-      end = line.find_first_of(']', start);
-      action.cpu = stol(line.substr(start, end - start));
-
-      /* action timestamp */
-      start = end + 1;
-      end = line.find_first_of('.', start);
-      long sec = stol(line.substr(start, end - start));
-      
-      start = end + 1;
-      end = line.find_first_of(':', start);
-      long nsec = stol(line.substr(start, end - start));
-      action.ts = sec*NSECS_PER_SECS + nsec;
-
-      /* action type */
-      start = line.find_first_not_of(' ', end + 1);
-      end = string::npos;
-      for (size_t i=0; i<action_type_strs.size(); ++i) {
-        string &type_str = action_type_strs[i];
-        if (line.substr(start, type_str.size()) == type_str) {
-          end = start + type_str.size();
-          action.type = (Action::ActionType)(Action::TR_START + i);
-          break;
-        }
-      }
-
-      if (end == string::npos) {
-        printf("error action type for line: %s\n", line.c_str());
-        abort();
-      }
-
-      /* action symbol */
-      start = line.find_first_not_of(' ', end);
-      end = line.find("=>", start);
-      action.from = Action::get_symbol(line.substr(start, end - start), nullptr);
-      action.from_target = (action.from.name == param.target) ? true : false;
-      
-      start = line.find_first_not_of(' ', end + 2);
-      end = line.size();
-      action.to = Action::get_symbol(line.substr(start, end - start), &action.from);
-      action.to_target = (action.to.name == param.target) ? true : false;
-
-      /* action for offcpu */
-      action.sched_begin = action.sched_end = false;
-      if (param.offcpu)
-        action.init_for_sched();
-
-      /* action for ancestor function */
-      action.ancestor_begin = action.ancestor_end = false;
-      if (param.ancestor != "")
-        action.init_for_ancestor();
-
-      if (!action.from_target && !action.to_target &&
-          !action.sched_begin && !action.sched_end &&
-          !action.ancestor_begin && !action.ancestor_end) {
-        /* current action does not contain target, ancestor,
-         * and sched functions, discard it */
-        continue;
-      }
-
-      if (!param.code_block && action.from_target && action.to_target) {
-        /* inner-function jump, skip */
-        continue;
-      }
-
-      /* add to action set */
-      add_action(action);
+  auto init_action = [&](Action &action) -> void {
+    if (action.pt_type != PT_ACTION_TYPE_BRANCH && 
+        action.pt_type != PT_ACTION_TYPE_ERROR) {
+      return;
     }
-  }
-}
-
-static uint32_t global_print_width = 100;
-static void init_print_width(Stat &stat) {
-  uint32_t num = 1;
-  if (param.offcpu) num += 1;
-  if (param.srcline) num += 1;
-  if (param.code_block) num += 1;
-  HistogramBucket hist_b;
-  hist_b.init_key(stat.children.target, [&](const std::string &name,
-        Bucket::Element &el) -> std::string {
-    return funcname_get_name(name);
-  });
-  global_print_width = std::max(HistogramDist::get_print_width(num), global_print_width);
-  global_print_width = std::max(hist_b.get_print_width(num), global_print_width);
-}
-
-static void print_cross_line(char c) {
-  printf("\n\033[33m");
-  for (int i = 0; i < global_print_width; ++i) printf("%c", c);
-  printf("\033[0m\n");
-}
-
-static void print_title(const char *title) {
-  printf("\033[32m%s\033[0m\n", title);
-}
-
-void Stat::add(Action &action_call, Action &action_return, uint64_t lat_s, LatencyChild &child) {
-  uint64_t lat_t = action_return.ts - action_call.ts;
-  std::string &caller = action_return.to.name;
-  if (lat_t < param.latency_interval.first || lat_t > param.latency_interval.second ||
-      action_call.ts < param.time_interval.first || action_call.ts > param.time_interval.second) {
-    return;
-  }
-  if (param.timeline && action_call.ts >= param.time_start) {
-    timeline_unit_lat += lat_t;
-    if (++timeline_unit == param.timeline_unit) {
-      // caculate the average for one timeline_unit
-      timeline.push_back({(action_call.ts - param.time_start) / 1000.0,
-                           timeline_unit_lat / timeline_unit / 1000.0}); // us
-      timeline_unit_lat = timeline_unit = 0;
+    if (action.is_error) {
+      /* add to error action set */
+      add_error_action(action);
+      return;
     }
-  } else {
-    add_latency(lat_t, lat_s, caller);
-    if (!param.code_block) {
-      // add latency of target function self
-      child.add_target(TARGET_SELF,
-          lat_t > child.target_total ? lat_t - child.target_total : 0);
-      child.add_sched(TARGET_SELF,
-          lat_s > child.sched_total ? lat_s - child.sched_total : 0);
-    }
-    add_child_latency(child, caller);
-  }
-}
+    action.from_target =
+      (action.from->name == param.target) ? true : false;
+    action.to_target =
+      (action.to->name == param.target) ? true : false;
 
-void Stat::Latency::print_summary() {
-  HistogramDist hist("ns");
-  target.set_val_name("cnt");
-  hist.add_dist(target);
-  if (param.offcpu) {
-    sched.set_val_name("sched");
-    hist.add_dist(sched);
-  }
-  hist.print();
-}
-
-void Stat::LatencyChild::print_summary() {
-  HistogramBucket hist;
-
-  Bucket oncpu("cpu_pct(%)");
-  Bucket srcline(param.call_line ? "call_line" : "src_line");
-  hist.init_key(target, [&](const std::string &name,
-        Bucket::Element &el) -> std::string {
-    if (name.find(unknown_latency_str) != std::string::npos) {
-      el.err_msg = "WARNING: Return of this child function is not found, "
-                    "you can trace its latency by '-f' directly";
-      return funcname_get_name(
-          name.substr(unknown_latency_str.size(), name.size()));
-    }
-    return funcname_get_name(name);
-  });
-  if (param.srcline) {
-    // add srcline to all buckets
-    srcline.add_bucket(target);
-    int width = 10;
-    srcline.loop_for_element([&](Bucket::Element &el){
-      if (el.name.find(CODE_BLOCK_PREFIX) != string::npos) {
-        // 'code block' latency needs the begin and end address
-        string srcline_from, srcline_to;
-        srcline_map.get(el.name + "_from", srcline_from);
-        srcline_map.get(el.name + "_to", srcline_to);
-        el.val_str = srcline_from + "-" + srcline_to;
-      } else if (el.name == TARGET_SELF) {
-        srcline_map.get(param.target, el.val_str);
-      } else {
-        srcline_map.get(el.name, el.val_str);
-      }
-      if (el.val_str.size() > width)
-        width = el.val_str.size();
-    });
-    srcline.set_width(width + 1);
-    hist.add_extra_bucket(&srcline);
-  }
-  if (param.offcpu) {
-    uint64_t trace_time
-      = param.trace_time * NSECS_PER_SECS - miss_trace_time.load();
-    sched.set_val_name("sched_time");
-    sched.set_count(target);
-    hist.add_extra_bucket(&sched);
-
-    oncpu.add_bucket(target);
-    oncpu.sub_bucket(sched);
-    oncpu.set_count(1);
-    oncpu.set_scale(trace_time / 100);
-    hist.add_extra_bucket(&oncpu);
-  }
-
-  hist.print();
-}
-
-static void print_latency(Stat::Latency &latency) {
-  latency.print_summary();
-
-  uint64_t target_avg = latency.target.get_avg();
-  uint64_t target_cnt = latency.target.get_count();
-  uint64_t sched_total = latency.sched.get_total();
-  uint64_t sched_cnt = latency.sched.get_count();
-
-  uint32_t width1 =
-    floor(log10(sched_cnt + target_cnt + 1)) + 1;
-  uint32_t width2 =
-    floor(log10(target_avg + 1)) + 1;
-  printf("trace count: %*lu, average latency: %*lu ns\n",
-          width1, target_cnt, width2, target_avg);
-  if (param.offcpu) {
-    uint64_t trace_time = param.trace_time * NSECS_PER_SECS - miss_trace_time.load();
-    uint64_t sched_avg =
-      target_cnt > 0 ? sched_total / target_cnt : 0;
-    int cpu_pct =
-         100 * ((target_avg - sched_avg) * target_cnt) / trace_time;
-    printf("sched count: %*lu,   sched latency: %*lu ns, cpu percent: %d \%\n",
-          width1, sched_cnt, width2, sched_avg, cpu_pct);
-  }
-}
-
-void Stat::generate_srcline() {
-  // put all callers
-  for (auto it = callers.begin(); it != callers.end(); ++it) {
-    LatencyCaller &caller = it->second;
-    std::string name = it->first;
-    uint64_t addr = funcname_get_addr(name);
-    if (addr > 0)
-      srcline_map.put(name, addr);
-    caller.children.target.loop_for_element([&](Bucket::Element &el){
-      uint64_t addr = funcname_get_addr(el.name);
-      if (addr > 0)
-        srcline_map.put(el.name, addr);
-    });
-  }
-  // put all children
-  children.target.loop_for_element([&](Bucket::Element &el){
-    uint64_t addr = funcname_get_addr(el.name);
-    if (addr > 0)
-      srcline_map.put(el.name, addr);
-  });
-  // generate srcline
-  srcline_map.process_address();
-}
-
-void Stat::print_summary() {
-  char title[1024];
-  string target_name = param.target;
-  if (param.srcline) {
-    generate_srcline();
-  }
-  bool is_target_complete =
-        (latency.target.get_total() > 0);
-  /* print target function's latency */
-  if (is_target_complete) {
-    print_cross_line('=');
-    snprintf(title, 1024,
-             "Histogram - Latency of [%s]:",
-             target_name.c_str());
-    print_title(title);
-    print_latency(latency);
-
+    /* action for offcpu */
+    action.sched_begin = action.sched_end = false;
     if (param.offcpu) {
-      printf("sched total: %lu, sched each time: %lu ns\n", sched_count,
-             sched_count > 0 ? (latency.sched.get_total() / sched_count) : 0);
+      action.init_for_sched();
     }
-    print_cross_line('-');
 
-    /* print child function's latency  */
-    snprintf(title, 1024,
-             "Histogram - Child functions's Latency of [%s]:",
-             target_name.c_str());
-    print_title(title);
-    children.print_summary();
+    /* action for ancestor function */
+    action.ancestor_begin = action.ancestor_end = false;
+    if (param.ancestor != "") {
+      action.init_for_ancestor(param.ancestor);
+    }
+
+    if (!action.from_target && !action.to_target &&
+        !action.sched_begin && !action.sched_end &&
+        !action.ancestor_begin && !action.ancestor_end) {
+      /* current action does not contain target, ancestor,
+       * and sched functions, discard it */
+      return;
+    }
+    if (!param.code_block && action.from_target && action.to_target) {
+      /* inner-function jump, discard it */
+      return;
+    }
+    /* add to action set */
+    add_action(action);
+    return;
+  };
+
+  if (param.compact_format) {
+    read_actions_from_compact_file(filename,
+        id, sym_mgr, init_action); 
+  } else {
+    read_actions_from_text_file(filename,
+        id, from, to, sym_mgr, init_action); 
   }
-
-  for (auto &it : callers) {
-    string caller_name = it.first;
-    auto &caller = it.second;
-    if (param.srcline) {
-      string srcline;
-      srcline_map.get(caller_name, srcline);
-      caller_name = funcname_get_name(caller_name) + "(" + srcline + ")";
-    }
-    if (is_target_complete && it.first == "unknown")
-      continue;
-
-    /* target function's latency from current caller */
-    print_cross_line('=');
-    if (it.first != "unknown") {
-      snprintf(title, 1024,
-             "Histogram - Latency of [%s]\n"
-             "           called from [%s]:",
-             target_name.c_str(), caller_name.c_str());
-      print_title(title);
-      print_latency(caller.latency);
-      print_cross_line('-');
-    }
-
-    /* print child function's latency from caller */
-    snprintf(title, 1024,
-             "Histogram - Child functions's Latency of [%s]\n"
-             "                             called from [%s]:",
-             target_name.c_str(), caller_name.c_str());
-    print_title(title);
-    caller.children.print_summary();
-  }
-  print_cross_line('=');
 }
 
-void Stat::print_timeline() {
-  graphs::options gopt;
-  gopt.type = graphs::type_braille;
-  gopt.mark = graphs::mark_dot;
-  gopt.style = graphs::style_light;
-  gopt.check = false;
-  gopt.color = graphs::color_default;
-  gopt.xlabel = "x(us)";
-  gopt.ylabel = "y(us)";
-  //gopt.yexponent = true;
-  printf("start_timestamp: %lld\n", param.time_start);
-  if (timeline.size() > 0)
-    graphs::plot(100, 160, 0, 0, 0, 0, timeline, gopt);
-}
-
-static void print_stat(unordered_map<long, ThreadJob *> &thread_jobs) {
+static void print_stat(FuncStat::Option &opt,
+    unordered_map<long, ThreadJob *> &thread_jobs) {
   auto t1 = ut_time_now();
   if (param.timeline) {
     vector<std::pair<long, ThreadJob *>> vec(thread_jobs.begin(), thread_jobs.end());
     std::sort(vec.begin(), vec.end());
     for (const auto &it: vec) {
       ThreadJob *thread_job = it.second;
-      Stat &stat = thread_job->get_stat();
+      FuncStat &stat = thread_job->get_stat();
       char title[1024];
       snprintf(title, 1024, "\nThread %ld: ", thread_job->get_tid());
       print_title(title);
       stat.print_timeline();
     }
   } else {
-    Stat global_stat;
+    FuncStat stat(opt, &srcline_map);
     /* merge all threads' latency */
     for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it) {
       ThreadJob *thread = it->second;
-      global_stat.merge(thread->get_stat());
+      stat.merge(thread->get_stat());
     }
-    init_print_width(global_stat);
-    global_stat.print_summary();
+    stat.print();
   }
   auto t2 = ut_time_now();
   printf("[ print stat has consumed %.2f seconds ]\n",
           ut_time_diff(t2, t1));
 }
 
-/*
- * Main function for analyzing performance of function
- * */
-static void analyze_funcs() {
-  auto t1 = ut_time_now();
-  size_t i;
-
-  /* 1. dispatch parse_jobs */
-  vector<ParseJob *> parse_jobs;
+static void assign_parse_jobs(vector<ParseJob *> &parse_jobs) {
   if (param.parallel_script) {
-    for (i = 0; i < param.worker_num; ++i) {
+    for (size_t i = 0; i < param.worker_num; ++i) {
       char filename[1024];
       sprintf(filename, SCRIPT_FILE_PREFIX "__%05d", i);
       parse_jobs.push_back(new ParseJob(string(filename), 0, UINT32_MAX, i));
@@ -1003,7 +563,7 @@ static void analyze_funcs() {
     size_t total = get_file_linecount(SCRIPT_FILE_PREFIX);
     if (total > 100 * param.worker_num) {
       size_t step = total / param.worker_num + 1;
-      for (i = 0; i < param.worker_num; ++i) {
+      for (size_t i = 0; i < param.worker_num; ++i) {
         size_t from = i * step;
         size_t to = std::min((i + 1) * step, total);
         parse_jobs.push_back(new ParseJob(SCRIPT_FILE_PREFIX, from, to, i));
@@ -1012,76 +572,90 @@ static void analyze_funcs() {
       parse_jobs.push_back(new ParseJob(SCRIPT_FILE_PREFIX, 0, UINT32_MAX, 0));
     }
   }
+}
 
-  // do parse jobs
-  for (i = 0; i < parse_jobs.size(); ++i) {
-    worker_pool.add_job(parse_jobs[i], i);
-  }
-  worker_pool.wait_all_idle();
-
-  auto t2 = ut_time_now();
-  printf("[ parse actions has consumed %.2f seconds ]\n",
-          ut_time_diff(t2, t1));
-  t1 = ut_time_now();
-
-  /* 2. analyze function for each thread */
-  unordered_map<long, ThreadJob*> thread_jobs;
+static void assign_thread_jobs(vector<ParseJob *> &parse_jobs,
+    unordered_map<long, ThreadJob*> &thread_jobs) {
   size_t total_actions = 0, error_actions = 0;
   for (ParseJob *parse_job : parse_jobs) {
     // create thread jobs
-    parse_job->loop_parsed_actions([&](ParseJob::ActionSet &as) {
+    parse_job->loop_parsed_actions([&](ActionSet &as) {
       long tid = as.tid;
       if (!thread_jobs.count(tid) && as.target > 0) {
          thread_jobs[tid] = new ThreadJob(tid, &parse_jobs);
       }
-      real_trace_time.first = std::min(real_trace_time.first, as.min_timestamp());
-      real_trace_time.second = std::max(real_trace_time.second, as.max_timestamp());
+      gstat.update_real(as);
       total_actions += as.size();
     });
-    parse_job->loop_error_actions([&](ParseJob::ActionSet &as) {
-      real_trace_time.first = std::min(real_trace_time.first, as.min_timestamp());
-      real_trace_time.second = std::max(real_trace_time.second, as.max_timestamp());
+    parse_job->loop_error_actions([&](ActionSet &as) {
+      gstat.update_real(as);
       error_actions += as.size();
     });
   }
-  param.time_start = real_trace_time.first;
+  param.time_start = gstat.real.first;
   total_actions += error_actions;
   printf("[ parsed %d actions, trace errors: %d ]\n", total_actions, error_actions);
+}
+
+/*
+ * Main function for analyzing performance of function
+ * */
+static void analyze_funcs() {
+  FuncStat::Option stat_opt = {
+     param.target,
+     param.offcpu,
+     param.call_line,
+     param.code_block,
+     param.latency_interval,
+     param.time_interval,
+     (uint64_t)(param.trace_time * NSECS_PER_SECS),
+     param.timeline,
+     param.time_start,
+     param.timeline_unit,
+     param.ip_filtering};
+
+  /* 1. dispatch parse_jobs */
+  vector<ParseJob *> parse_jobs;
+  assign_parse_jobs(parse_jobs);
+  
+  // do parse jobs
+  auto t1 = ut_time_now();
+  for (size_t i = 0; i < parse_jobs.size(); ++i) {
+    worker_pool.add_job(parse_jobs[i], i);
+  }
+  worker_pool.wait_all_idle();
+  auto t2 = ut_time_now();
+
+  printf("[ parse actions has consumed %.2f seconds ]\n",
+          ut_time_diff(t2, t1));
+
+  /* 2. analyze function for each thread */
+  unordered_map<long, ThreadJob*> thread_jobs;
+  assign_thread_jobs(parse_jobs, thread_jobs);
+  stat_opt.time_start = param.time_start;
 
   // do thread job
-  i = 0;
+  size_t i = 0;
+  t1 = ut_time_now();
   for (auto it = thread_jobs.begin(); it != thread_jobs.end(); ++it, ++i) {
+    it->second->init_stat(stat_opt);
     worker_pool.add_job(it->second, i);
   }
   worker_pool.wait_all_idle();
-
   t2 = ut_time_now();
+
   printf("[ analyze functions has consumed %.2f seconds ]\n",
           ut_time_diff(t2, t1));
 
-  // caculate the real trace time base on all actions timestamp
-  if (real_trace_time.second > real_trace_time.first) {
-    double trace_time =
-          (double)(real_trace_time.second - real_trace_time.first) / NSECS_PER_SECS;
-    printf("[ real trace time: %0.2f seconds ]\n", trace_time);
-    if (trace_time > param.trace_time)
-      param.trace_time = trace_time;
+  if (gstat.real_trace_time() > param.trace_time) {
+    param.trace_time = gstat.real_trace_time();
+    stat_opt.trace_time = (uint64_t)(param.trace_time * NSECS_PER_SECS);
   }
-
-  if (thread_jobs.size())
-    miss_trace_time.store(miss_trace_time.load() / thread_jobs.size());
-  printf("[ miss trace time: %0.2f seconds ]\n", (double) miss_trace_time.load() / NSECS_PER_SECS);
-
-  if (param.ancestor != "") {
-    char title[1024];
-    snprintf(title, 1024,
-        "[ ancestor: %s, call: %llu, return: %llu ]", param.ancestor.c_str(),
-        ancestor_begin_count.load(), ancestor_end_count.load());
-    print_title(title);
-  }
+  gstat.print(thread_jobs.size(), param.ancestor);
+  stat_opt.trace_time -= gstat.miss.load();
 
   /* print summary */
-  print_stat(thread_jobs);
+  print_stat(stat_opt, thread_jobs);
 
   // free memory of all allocated job
   vector<MemoryFreeJob> memfree_jobs(parse_jobs.size() + thread_jobs.size());
@@ -1097,94 +671,40 @@ static void analyze_funcs() {
   worker_pool.wait_all_idle();
 }
 
-static void perf_record() {
-  char perf_cmd[1024];
-  char record_filter[1024];
+static string get_record_filter() {
+  if (!param.ip_filtering)
+    return "";
+
+  string record_filter = "";
   string binary = param.binary;
-  stringstream trace_param;
-  snprintf(record_filter, 1024, "");
-
-  /* record filter */
-  if (param.ip_filtering) {
-    string filter2 = "";
-    if (param.offcpu)
-      filter2 = param.offcpu_filter;
-    if (param.ancestor != "") {
-      if (param.offcpu) {
-        printf("ERROR: under ip_filter, offcpu and ancestor filter "
-               "can not be set at the same time.\n");
-        exit(0);
-      }
-      filter2 = "filter " + param.ancestor +
-                 " #0 @ " + binary + ",";
-    }
-    if (binary == "") {
-      // kernel function
-      param.func_idx = "";
-    } else {
-      // user function
-      binary = "@ " + binary;
-    }
-    snprintf(record_filter, 1024, "--filter '%sfilter %s %s %s'",
-             filter2.c_str(), param.target.c_str(),
-             param.func_idx.c_str(), binary.c_str());
-  }
-
-  /* trace parameter */
-  if (param.cpu != "") {
-    trace_param << " -C " << param.cpu;
-    printf("[ trace cpu %s for %.2f seconds ]\n", param.cpu.c_str(), param.trace_time);
+  string filter2 = "";
+  if (param.offcpu)
+    filter2 = param.offcpu_filter;
+  if (param.ancestor != "") {
     if (param.offcpu) {
-      // TODO: there exists never-stop looping
-      // when tracing schedule function for cpu tracing
-      printf("Warning: offcpu is not support for CPU tracing, turn it off\n");
-      param.offcpu = false;
+      printf("ERROR: under ip_filter, offcpu and ancestor filter "
+             "can not be set at the same time.\n");
+      exit(0);
     }
-    if (param.ip_filtering) {
-      printf("Warning: ip filtering is not support for CPU tracing, turn it off\n");
-      param.ip_filtering = false;
-    }
-  } else if (param.tid != "") {
-    trace_param << " -t " << param.tid;
-    printf("[ trace thread %s for %.2f seconds ]\n", param.tid.c_str(), param.trace_time);
-  } else if (param.pid != -1) {
-    trace_param << " -p " << param.pid;
-    printf("[ trace process %ld for %.2f seconds ]\n", param.pid, param.trace_time);
+    filter2 = "filter " + param.ancestor + " #0 @ " + binary + ",";
+  }
+  if (binary == "") {
+    // kernel function
+    param.func_idx = "";
   } else {
-    printf("ERROR: use --cpu/--pid/--tid to set trace method\n");
-    exit(0);
+    // user function
+    binary = "@ " + binary;
   }
-
-  if (param.per_thread_mode) {
-    trace_param << " --per-thread --timestamp ";
-  }
-
-  /* perf record */
-  snprintf(perf_cmd, 1024,
-    "%s record -e intel_pt/%s/%c -B %s %s -m,32M --no-bpf-event -- sleep %f",
-    param.perf_tool.c_str(), param.pt_config.c_str(), param.offcpu ? ' ' : 'u',
-    record_filter, trace_param.str().c_str(), param.trace_time);
-
-  if (param.verbose) printf("%s\n", perf_cmd);
-  /* execute */
-  auto t1 = ut_time_now();
-  system(perf_cmd);
-  auto t2 = ut_time_now();
-  printf("[ perf record has consumed %.2f seconds ]\n",
-          ut_time_diff(t2, t1));
+  record_filter = "--filter '" + filter2 + "filter " + param.target +
+                  " " + param.func_idx + " " + binary + "'";
+  return record_filter;
 }
 
-static void perf_script() {
-  stringstream perf_cmd, script_filter;
-  string itrace = "b";
-  string field = "-F-event,-period,+tid,+cpu,+time,+addr,-comm,+flags,-dso";
-
-  clear_script_files();
-
-  /* script filter */
+static string get_script_filter() {
+  stringstream script_filter;
+  // ip filter
   if (param.parallel_script) {
-    // ip filter
-    if (!param.ip_filtering) {
+    if (!param.ip_filtering && param.flamegraph == "") {
       if (param.target != "") {
         script_filter << " --func_filter=\"" << param.target;
         if (param.ancestor != "")
@@ -1211,85 +731,57 @@ static void perf_script() {
              param.time_interval.second % NSECS_PER_SECS);
     script_filter << time_filter;
   }
-
   /* use dl filter to discard internal jump of target function, if not analyze code block latency */
   if (!param.code_block && access(param.perf_dlfilter.c_str(), F_OK) != -1) {
     script_filter << " --dlfilter=" << param.perf_dlfilter;
   }
-
-  if (param.flamegraph == "cpu") {
-    itrace = "i10usg127";
-    field = "";
-  } else if (param.flamegraph == "latency") {
-    itrace = "b";
-  } else {
-    // for trace errors
-    itrace += "e";
-  }
-
-  /* perf script */
-  perf_cmd << param.perf_tool << " script --ns"
-           << " --itrace=" << itrace
-           << " " << script_filter.str()
-           << " " << field;
-  if (param.parallel_script) {
-    perf_cmd << " --parallel=" << param.worker_num
-             << " " << (param.verbose ? "" : "&> /dev/null");
-  } else {
-    perf_cmd << " > script_out";
-  }
-  if (param.verbose) printf("%s\n", perf_cmd.str().c_str());
-  auto t1 = ut_time_now();
-  exec_cmd_killable(perf_cmd.str());
-  auto t2 = ut_time_now();
-  printf("[ perf script has consumed %.2f seconds ]\n",
-          ut_time_diff(t2, t1));
+  return script_filter.str();
 }
 
-static void print_flame_graph() {
-  stringstream cmd;
-  char filename[128];
+static void check_parameter() {
+  if (param.verbose) dump_options();
 
-  if (param.flamegraph == "latency") {
-    /* latency flamegraph */
-    cmd << param.pt_flame_home << "/bin/pt_flame -j " << param.worker_num;
-    if (param.parallel_script) {
-      for (size_t i = 0; i < param.worker_num; ++i) {
-        snprintf(filename, 128, SCRIPT_FILE_PREFIX "__%05d", i);
-        cmd << " " << filename;
-      }
-    } else {
-      cmd << " " SCRIPT_FILE_PREFIX;
-    }
-    cmd << " | " << param.scripts_home << "/flamegraph.pl"
-        << " --countname=\"ns\" > flame.svg";
-  } else if (param.flamegraph == "cpu") {
-    /* cpu flamegraph */
-    cmd << "cat ";
-    if (param.parallel_script) {
-      for (size_t i = 0; i < param.worker_num; ++i) {
-        snprintf(filename, 128, SCRIPT_FILE_PREFIX "__%05d", i);
-        if (access(filename, F_OK) != -1) {
-          cmd << " " << filename;
-        }
-      }
-    } else {
-      cmd << " " SCRIPT_FILE_PREFIX;
-    }
-    cmd << " | " << param.scripts_home << "/stackcollapse-perf.pl"
-        << " | " << param.scripts_home << "/flamegraph.pl > flame.svg";
-  } else {
-    printf("ERROR: wrong flamegraph mode, use latency or cpu\n");
-    return;
+  if (system("addr2line --help &> /dev/null")) {
+    printf("Warning: addr2line command not found, run without srcline.\n");
+    param.call_line = false;
   }
-
-  if (param.verbose) printf("%s\n", cmd.str().c_str());
-  auto t1 = ut_time_now();
-  system(cmd.str().c_str());
-  auto t2 = ut_time_now();
-  printf("[ print flame graph has consumed %.2f seconds ]\n",
-          ut_time_diff(t2, t1));
-  printf("[ Flamegraph has been saved to flame.svg ]\n");
+  if (param.binary == "") {
+    printf("Warning: binary path is empty, run without srcline.\n");
+    param.call_line = false;
+  }
+  if (param.ancestor == param.target) {
+    param.ancestor = "";
+    param.latency_interval.first =
+      std::max(param.latency_interval.first, param.ancestor_latency.first);
+    param.latency_interval.second =
+      std::min(param.latency_interval.second, param.ancestor_latency.second);
+  }
+  if (param.offcpu && getuid() != 0) {
+    printf("Error: offcpu time needs root privilege, please use sudo command\n");
+    exit(0);
+  }
+  if (param.flamegraph == "latency" && check_pt_flame(param.pt_flame_home)) {
+    exit(0);
+  }
+  if (param.cpu != "" && param.offcpu) {
+    // TODO: there exists never-stop looping
+    // when tracing schedule function for cpu tracing
+    printf("Warning: offcpu is not support for CPU tracing, turn it off\n");
+    param.offcpu = false;
+  }
+  if (param.cpu != "" && param.ip_filtering) {
+    printf("Warning: ip filtering is not support for CPU tracing, turn it off\n");
+    param.ip_filtering = false;
+  }
+  if (param.flamegraph == "" && param.target == "") {
+    printf("ERROR: target function name is required if is not in flamegraph mode\n");
+    exit(0);
+  }
+  if (param.compact_format) {
+    if (!param.parallel_script || param.flamegraph != "") {
+      param.compact_format = false;
+    }
+  }
 }
 
 int main(int argc, char *argv[]) {
@@ -1361,11 +853,14 @@ int main(int argc, char *argv[]) {
         param.pt_flame_home = string(optarg);
         break;
       case '5':
-        param.call_line = false;
-        break;
-      case '6':
         param.pt_config = string(optarg);
         break;
+      case '6': {
+        string script_format = string(optarg);
+        if (script_format == "text") {
+          param.compact_format = false;
+        }
+        break;}
       case 'c':
         param.code_block = true;
         break;
@@ -1407,69 +902,64 @@ int main(int argc, char *argv[]) {
         exit(0);
     }
   }
-  if (param.verbose) dump_options();
+  
+  check_parameter();
 
-  if (system("addr2line --help &> /dev/null")) {
-    printf("Warning: addr2line command not found, run without srcline.\n");
-    param.srcline = false;
-  }
-
-  if (param.binary == "") {
-    printf("Warning: binary path is empty, run without srcline.\n");
-    param.srcline = false;
-  }
-
-  if (param.trace_time <= 0) {
-    printf("Error: trace_time must be greater than 0\n ");
-    exit(0);
-  }
-
-  if (param.ancestor == param.target) {
-    param.ancestor = "";
-    param.latency_interval.first =
-      std::max(param.latency_interval.first, param.ancestor_latency.first);
-    param.latency_interval.second =
-      std::min(param.latency_interval.second, param.ancestor_latency.second);
-  }
-
-  if (param.offcpu && getuid() != 0) {
-    printf("Error: offcpu time needs root privilege, please use sudo command\n");
-    exit(0);
-  }
-
-  if (param.flamegraph == "latency" && check_pt_flame(param.pt_flame_home)) {
-    exit(0);
-  }
+  PerfOption perf_option = {
+    param.binary,
+    param.cpu,
+    param.tid,
+    param.pid,
+    param.trace_time,
+    param.per_thread_mode,
+    param.perf_tool,
+    "",
+    "",
+    param.parallel_script,
+    "",
+    "-F-event,-period,+tid,+cpu,+time,+addr,-comm,+flags,-dso",
+    "be",
+    param.worker_num,
+    param.compact_format,
+    param.history,
+    param.verbose};
 
   // perf record
-  if (param.history < 2)
-    perf_record();
+  perf_option.intel_pt_config = "intel_pt/" + param.pt_config +
+                                "/" + (param.offcpu ? ' ' : 'u');
+  perf_option.record_filter = get_record_filter();
+  perf_record(perf_option);
 
-  if (param.history == 1) {
-    printf("[ trace done, you can copy perf.data and the binary file \n"
-           "  (with the same absolute path) to another machine for analysis. ]\n");
-    exit(0);
-  }
-
-  printf("[ start %d parallel workers ]\n", param.worker_num);
   // create worker pool
   worker_pool.start(param.worker_num);
 
+  // init srcline map
+  srcline_map.init(param.binary);
+
   // perf script
+  perf_option.script_filter = get_script_filter();
+  if (param.flamegraph == "cpu") {
+    perf_option.itrace = "i10usg127";
+    perf_option.fields = "";
+  } else if (param.flamegraph == "latency") {
+    perf_option.itrace = "b";
+  }
   if (param.history < 3) {
-    perf_script();
+    perf_script(perf_option);
   }
 
   if (param.flamegraph != "") {
     // flamegraph mode
-    print_flame_graph();
+    FlameGraphOption flame_option = {
+      param.flamegraph,
+      param.scripts_home,
+      param.pt_flame_home,
+      param.parallel_script,
+      param.worker_num,
+      param.verbose};
+    print_flame_graph(flame_option);
   } else {
     // function analysis mode
-    if (param.target == "") {
-      printf("ERROR: target function name is required if is not in flamegraph mode\n");
-      exit(0);
-    }
-    /* analyze funcs */
     analyze_funcs();
   }
 

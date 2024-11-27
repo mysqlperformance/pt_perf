@@ -5,9 +5,14 @@
 #include <atomic>
 #include <thread>
 #include <mutex>
+#include <vector>
 
+#define NSECS_PER_SECS 1000000000UL
 #define PT_HOME_PATH "/sys/devices/intel_pt"
 #define PT_IP_FILTER_PATH "/sys/devices/intel_pt/caps/ip_filtering"
+
+const std::string sys_sched_funcname = "__schedule";
+const std::string sys_sched_funcname_419 = "__sched_text_start";
 
 #define ut_time_now() std::chrono::steady_clock::now()
 #define ut_time_diff(t2, t1) std::chrono::duration<double>(t2 - t1).count()

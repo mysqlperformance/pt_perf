@@ -22,7 +22,6 @@
 extern int parallel_worker;
 extern int parallel_by_events;
 extern const char *parallel_prefix;
-extern bool parallel_preflight;
 extern int parallel_file_count;
 extern size_t parallel_event_added;
 extern size_t parallel_batch;
@@ -32,6 +31,7 @@ extern size_t cpu_thread_size;
 extern size_t cpu_thread_last_psb_add;
 extern const char *func_filter_str;
 extern const char *opt_dso_name;
+extern int opt_compact_format;
 bool func_filter_match(const char *name);
 
 union perf_event;
@@ -581,8 +581,18 @@ struct parallel_cache_entry {
 	int buffer_lookahead;
 	int last_psb_lookahead;
 };
+
+struct output_symbol_entry {
+	struct auxtrace_cache_entry entry;
+	uint32_t sym_id;
+	uint64_t addr;
+	uint32_t offs;
+};
 extern struct parallel_cache_entry cpu_batch_events[];
 extern struct auxtrace_cache *thread_batch_events;
+extern struct auxtrace_cache *output_symbols;
+struct output_symbol_entry* output_symbols_lookup_and_add(
+    uint64_t addr, uint32_t offs, const char *name, FILE *fp);
 
 struct auxtrace_cache *auxtrace_cache__new(unsigned int bits, size_t entry_size,
 					   unsigned int limit_percent);

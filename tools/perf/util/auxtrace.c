@@ -62,6 +62,7 @@
 #include <internal/lib.h>
 #include "util/sample.h"
 #include "util/thread.h"
+#include "include/perf/pt_compact_format.h"
 
 int parallel_worker = 1; // worker number to do perf script
 int parallel_by_events = 0;
@@ -144,6 +145,32 @@ bool func_filter_match(const char *name) {
 			return true;
 	}
 	return false;
+}
+
+/* For compact output */
+int opt_compact_format = 0;
+struct auxtrace_cache *output_symbols = NULL;
+size_t global_sym_id = 0;
+static void output_symbol_cache_init(void) {
+	if (opt_compact_format) {
+		output_symbols = auxtrace_cache__new(12,
+			sizeof(struct output_symbol_entry), 10000);
+	}
+}
+
+struct output_symbol_entry* output_symbols_lookup_and_add(
+    uint64_t addr, uint32_t offs, const char *name, FILE *fp) {
+	struct output_symbol_entry *e =
+	  auxtrace_cache__lookup(output_symbols, addr);
+	if (!e) {
+		e = auxtrace_cache__alloc_entry(output_symbols);
+		e->sym_id = global_sym_id++;
+		e->addr = addr;
+		e->offs = offs;
+		auxtrace_cache__add(output_symbols, addr, &e->entry);
+		pt_fwrite_symbol_action(fp, e->sym_id, e->addr, e->offs, name);
+	}
+	return e;
 }
 
 /*
@@ -521,8 +548,13 @@ int auxtrace_queues__add_event(struct auxtrace_queues *queues,
 				/* redirect child script stdio to file */
 				sprintf(parallel_file_name, "%s_%05d",
 					parallel_prefix, parallel_file_count);
-				parallel_redirect_stdout = freopen(
-					parallel_file_name, "w", stdout);
+				if (opt_compact_format) {
+				  parallel_redirect_stdout = freopen(
+				  	parallel_file_name, "wb", stdout);
+				} else {
+				  parallel_redirect_stdout = freopen(
+				  	parallel_file_name, "w", stdout);
+				}
 			} else {
 				worker_pids[parallel_file_count] = parallel_child_pid;
 			}
@@ -1210,6 +1242,9 @@ int auxtrace_queues__process_index(struct auxtrace_queues *queues,
 	/* init func_filter */
 	func_filter_init();
 
+	/* init output symbol cache */
+	output_symbol_cache_init();
+
 	list_for_each_entry(auxtrace_index, &session->auxtrace_index, list) {
 		for (i = 0; i < auxtrace_index->nr; i++) {
 			ent = &auxtrace_index->entries[i];
@@ -1238,6 +1273,9 @@ int auxtrace_queues__process_index(struct auxtrace_queues *queues,
 			}
 			free(worker_pids);
 			auxtrace_cache__free(thread_batch_events);
+			if (output_symbols) {
+				auxtrace_cache__free(output_symbols);
+			}
 			worker_pids = NULL;
 			exit(0);
 		}
@@ -1915,6 +1953,10 @@ size_t perf_event__fprintf_auxtrace_error(union perf_event *event, FILE *fp)
 	unsigned long long nsecs = e->time;
 	const char *msg = e->msg;
 	int ret;
+
+	if (opt_compact_format) {
+		return pt_fwrite_error_action(fp, e->tid, e->time, e->code);
+	}
 
 	ret = fprintf(fp, " %s error type %u",
 		      auxtrace_error_name(e->type), e->type);

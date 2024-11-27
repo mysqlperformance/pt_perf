@@ -75,4 +75,4 @@ if [ x"$clear_log" = x"0" ]; then
 else
   rm -rf *.log
 fi
-cd ../..
+cd ..

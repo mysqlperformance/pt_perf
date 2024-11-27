@@ -2160,6 +2160,9 @@ out_err:
 
 	if (thread_batch_events)
 		auxtrace_cache__free(thread_batch_events);
+
+	if (output_symbols)
+		auxtrace_cache__free(output_symbols);
 	return err;
 }
 
