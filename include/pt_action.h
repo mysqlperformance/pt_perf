@@ -85,11 +85,13 @@ public:
 };
 
 struct ActionSet {
+  static bool out_of_order;
   int tid;
   uint32_t target;
   std::vector<Action> actions;
   void add_action(Action &action) {
-    assert(actions.empty() || action.ts >= actions.back().ts || action.is_error);
+    assert(ActionSet::out_of_order || actions.empty() ||
+        action.ts >= actions.back().ts || action.is_error);
     actions.emplace_back(action);
   }
   Action &operator[] (uint32_t i) { return actions[i]; }
@@ -97,7 +99,7 @@ struct ActionSet {
   static inline bool cmp_action(const Action &a1, const Action &a2) {
     return a1.ts < a2.ts;
   }
-  void sort() { std::sort(actions.begin(), actions.end(), cmp_action); }
+  void sort() { std::stable_sort(actions.begin(), actions.end(), cmp_action); }
   uint64_t min_timestamp() { return actions.empty() ? UINT64_MAX : actions[0].ts; }
   uint64_t max_timestamp() { return actions.empty() ? 0 : actions.back().ts; }
   ActionSet() : target(0) {}

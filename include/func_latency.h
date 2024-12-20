@@ -77,10 +77,17 @@ public:
 
   void decode_to_actions();
   void sort_actions() {
-    // now only error actions may be out-of-order
+    // now only error actions may be out-of-order. if pt is configed
+    // with "cyc == 0", it may be out-of-order too.
     for (auto it = error_actions.begin(); it != error_actions.end(); ++it) {
       ActionSet &as = it->second;
       as.sort();
+    }
+    if (pt::ActionSet::out_of_order) {
+      for (auto it = parsed_actions.begin(); it != parsed_actions.end(); ++it) {
+        ActionSet &as = it->second;
+        as.sort();
+      }
     }
   }
   size_t parsed_actions_num(int tid) {

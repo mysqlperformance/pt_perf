@@ -6,6 +6,7 @@ namespace pt {
 using namespace std;
 
 static string trace_error_str = " instruction trace error";
+bool ActionSet::out_of_order = false;
 using defer = std::shared_ptr<void>;
 
 void Action::init_for_sched() {

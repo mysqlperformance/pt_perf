@@ -782,6 +782,10 @@ static void check_parameter() {
       param.compact_format = false;
     }
   }
+
+  if (param.pt_config.find("cyc=1") == std::string::npos) {
+    pt::ActionSet::out_of_order = true;
+  }
 }
 
 int main(int argc, char *argv[]) {
