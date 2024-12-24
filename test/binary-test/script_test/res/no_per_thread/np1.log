@@ -1,5 +1,5 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% normal non-per-thread test 1    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 --history=2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% normal non-per-thread test 1    --script_format='compact' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 --script_format='compact' --history=2
 [ parsed 300 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -14,7 +14,7 @@
 | std::atomic_bool::load : 35         50         binary.cc:42 |                    |
 
 [33m====================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 --script_format='compact' --history=2
 [ parsed 67766 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -72,7 +72,7 @@ trace count: 22, average latency: 5959378 ns
     d>                                 : 0          22         binary.cc:36 |                    |
 
 [33m======================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --script_format='compact' --history=2
 [ parsed 542 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -146,7 +146,7 @@ trace count: 25, average latency: 6660825 ns
 | *self                                : 11         25         -            |                    |
 
 [33m======================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --li=4194304,8388607 --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --script_format='compact' --li=4194304,8388607 --history=2
 [ parsed 542 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -214,7 +214,7 @@ trace count: 8, average latency: 7100816 ns
 | *self                                : 12         8          -            |                    |
 
 [33m======================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --ti=27231953741678534,34977000,57208000 --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --script_format='compact' --ti=27231953741678534,34977000,57208000 --history=2
 [ parsed 140 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -288,7 +288,7 @@ trace count: 5, average latency: 7098995 ns
 | *self                                : 11         5          -            |                    |
 
 [33m======================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -l --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 --script_format='compact' -l --history=2
 [ parsed 542 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -376,7 +376,7 @@ start_timestamp: 27231953741678534
 │⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀
 ┼───────────┬───────────┬───────────┬───────────┬───────────┬───────────┬──────┐
 ┘⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀19294.6⠀⠀⠀⠀⠀31588.7⠀⠀⠀⠀⠀43882.8⠀⠀⠀⠀⠀56176.9⠀⠀⠀⠀⠀68471⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀x(us)
-../../../func_latency -b /u01/pt_perf_test/binary -f std::to_string -d 0.1 -a do_cpu_work --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f std::to_string -d 0.1 --script_format='compact' -a do_cpu_work --history=2
 [ parsed 45103 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -421,8 +421,8 @@ trace count: 11264, average latency: 252 ns
 | *self                                : 0          11264      -                   |                    |
 
 [33m======================================================================================================[0m
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% normal non-per-thread test 2    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -i --history=2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% normal non-per-thread test 2    --script_format='compact' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 --script_format='compact' -i --history=2
 [ parsed 348 actions, trace errors: 0 ]
 [ real trace time: 0.11 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -437,7 +437,7 @@ trace count: 11264, average latency: 252 ns
 | std::atomic_bool::load : 30         58         binary.cc:42 |                    |
 
 [33m====================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -i -l --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 --script_format='compact' -i -l --history=2
 [ parsed 348 actions, trace errors: 0 ]
 [ real trace time: 0.11 seconds ]
 [ miss trace time: 0.00 seconds ]

@@ -174,6 +174,8 @@ void ThreadJob::do_analyze() {
   Action *ancestor_begin = nullptr;
 
   Action *cursor = nullptr;
+  // if current execution chain is wrong
+  bool wrong_chain = true;
 
   /* clear execution chain */
   auto clear_context = [&]() {
@@ -190,7 +192,7 @@ void ThreadJob::do_analyze() {
     /* for "to" symbol, attach call address to
      * the tail of funcname */
     if (param.call_line && static_cast<int64_t>(a1->to->addr) > 0
-        && !unknown && child_name != param.target
+        && child_name != param.target
         && child_name != param.ancestor) {
       // show the source line of the call address
       funcname_add_addr(child_name, a1->from->addr);
@@ -232,7 +234,7 @@ void ThreadJob::do_analyze() {
     if (action.is_error) {
       /* encounter trace error, discard current execution chain,
        * set caller of exist child latency as unknown */
-      stat.add_child_latency(child, "unknown", false);
+      stat.add_unknown_latency(child, "unknown");
       clear_context();
       prev_target_error = true;
       continue;
@@ -248,8 +250,16 @@ void ThreadJob::do_analyze() {
        if (!child.empty()) {
           /* there are not return action in last execution chain,
            * we just add the child latency information */
-          stat.add_child_latency(child, "unknown", false);
-          child.clear();
+         if (!wrong_chain && target_begin) {
+           std::string caller = target_begin->from->name;
+           if (param.call_line && !param.ip_filtering) {
+             funcname_add_addr(caller, target_begin->from->addr);
+           }
+           stat.add_unknown_latency(child, caller);
+         } else {
+           stat.add_unknown_latency(child, "unknown");
+         }
+         child.clear();
        }
        /* this action is the start point for target function,
         * clear context in previous round. */
@@ -270,6 +280,7 @@ void ThreadJob::do_analyze() {
          prev_target_error = false;
        }
        target_begin = &action;
+       wrong_chain = false; // reset
        cursor = &action;
        continue;
     }
@@ -370,6 +381,7 @@ void ThreadJob::do_analyze() {
         } else {
           // wrong chain
           stack.clear();
+          wrong_chain = true;
           report_error_action("trace", &action, param.verbose);
         }
         sched_in_child = 0;
@@ -410,6 +422,7 @@ void ThreadJob::do_analyze() {
         } else {
           // wrong chain, discard it
           stack.clear();
+          wrong_chain = true;
           sched_in_target = sched_in_child = 0;
         }
         break;
@@ -422,7 +435,7 @@ void ThreadJob::do_analyze() {
   if (!child.empty()) {
      /* there are incomplete call chains, just add
       * the child latency for more information */
-     stat.add_child_latency(child, "unknown", false);
+     stat.add_unknown_latency(child, "unknown");
   }
 }
 

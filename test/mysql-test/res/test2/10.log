@@ -165,16 +165,41 @@ sched count: 13884,   sched latency:  13187 ns, cpu percent: 917 %
 
 [33m=======================================================================================================================================================[0m
 [32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [row_upd_clust_rec(row0upd.cc:2837)]:[0m
+                   name                : avg        cnt        call_line                        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 145        1495       btr0cur.cc:3545                  0          0.11      |********************|
+| rec_get_offsets                      : 121        1495       btr0cur.cc:3535                  0          0.09      |****************    |
+| *code block: 147-149                 : 1          1495       btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 0-121                   : 0          1495       btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
+| *code block: 264-316                 : 0          1495       btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
+| *code block: 126-142                 : 0          1495       btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| btr_cur_update_in_place              : unknown    1495       btr0cur.cc:3551  incomplete call/return, trace it directly
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [row_ins_clust_index_entry_low(row0ins.cc:358)]:[0m
+                   name                : avg        cnt        call_line                        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 199        730        btr0cur.cc:3545                  0          0.07      |********************|
+| rec_get_offsets                      : 96         730        btr0cur.cc:3535                  0          0.03      |*********           |
+| *code block: 147-149                 : 0          730        btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 126-142                 : 0          730        btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 264-316                 : 0          730        btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
+| *code block: 0-121                   : 0          730        btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
+| btr_cur_update_in_place              : unknown    730        btr0cur.cc:3551  incomplete call/return, trace it directly
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
                              called from [unknown(-)]:[0m
                    name                : avg        cnt        call_line                        sched_time cpu_pct(%) distribution (total) 
 | row_upd_changes_field_size_or_extern
-    al                                 : 163        2245       btr0cur.cc:3545                  0          0.18      |********************|
-| rec_get_offsets                      : 113        2245       btr0cur.cc:3535                  0          0.13      |*************       |
-| *code block: 147-149                 : 1          2245       btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
-| *code block: 0-121                   : 0          2245       btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
-| *code block: 264-316                 : 0          2245       btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
-| btr_cur_update_in_place              : WARNING: Return of this child function is not found, you can trace its latency by '-f' directly
-| *code block: 126-142                 : 0          2245       btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+    al                                 : 221        20         btr0cur.cc:3545                  0          0.00      |********************|
+| rec_get_offsets                      : 75         20         btr0cur.cc:3535                  0          0.00      |******              |
+| *code block: 0-121                   : 0          20         btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
+| *code block: 264-316                 : 0          20         btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
+| *code block: 126-142                 : 0          20         btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 147-149                 : 0          20         btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
 
 [33m=======================================================================================================================================================[0m
 %%%%%%%%%%%%% test text case [log_writer]

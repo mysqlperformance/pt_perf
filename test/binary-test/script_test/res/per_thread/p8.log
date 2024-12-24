@@ -1,5 +1,5 @@
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% offcpu per_thread test 1    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -o -t --history=2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% offcpu per_thread test 1    --script_format='compact' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -o --script_format='compact' -t --history=2
 [ parsed 564 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -14,7 +14,7 @@
 | std::atomic_bool::load : 33         57         binary.cc:42  0          0.00      |                    |
 
 [33m========================================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 -o -t --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 -o --script_format='compact' -t --history=2
 [ parsed 74144 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -75,7 +75,7 @@ sched count: 22,   sched latency: 5461965 ns, cpu percent: 3 %
     d>                                 : 0          22         binary.cc:36  0          0.00      |                    |
 
 [33m============================================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o --script_format='compact' -t --history=2
 [ parsed 876 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -154,7 +154,7 @@ sched count: 32,   sched latency: 5056933 ns, cpu percent: 1 %
 | *self                                : 11         32         -             0          0.00      |                    |
 
 [33m============================================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t --li=4194304,8388607 --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o --script_format='compact' -t --li=4194304,8388607 --history=2
 [ parsed 876 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -225,8 +225,8 @@ sched count: 13,   sched latency: 6371089 ns, cpu percent: 0 %
 | *self                                : 11         13         -             0          0.00      |                    |
 
 [33m============================================================================================================================[0m
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% offcpu per_thread test 2    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -o -t -i --history=2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% offcpu per_thread test 2    --script_format='compact' %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+../../../func_latency -b /u01/pt_perf_test/binary -f thread_func -d 0.1 -o --script_format='compact' -t -i --history=2
 [ parsed 474 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -241,7 +241,7 @@ sched count: 13,   sched latency: 6371089 ns, cpu percent: 0 %
 | std::atomic_bool::load : 26         56         binary.cc:42  0          0.00      |                    |
 
 [33m========================================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 -o -t -i --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_cpu_work -d 0.1 -o --script_format='compact' -t -i --history=2
 [ parsed 74058 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -302,7 +302,7 @@ sched count: 23,   sched latency: 5054125 ns, cpu percent: 2 %
     d>                                 : 5          23         binary.cc:36  0          0.00      |                    |
 
 [33m============================================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t -i --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o --script_format='compact' -t -i --history=2
 [ parsed 534 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]
@@ -379,7 +379,7 @@ sched count: 21,   sched latency: 6105393 ns, cpu percent: 0 %
 | std::operator|                       : 1          21         binary.cc:23  0          0.00      |                    |
 
 [33m============================================================================================================================[0m
-../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o -t -i --li=4194304,8388607 --history=2
+../../../func_latency -b /u01/pt_perf_test/binary -f do_io -d 0.1 -o --script_format='compact' -t -i --li=4194304,8388607 --history=2
 [ parsed 534 actions, trace errors: 0 ]
 [ real trace time: 0.10 seconds ]
 [ miss trace time: 0.00 seconds ]

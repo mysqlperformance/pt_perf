@@ -294,8 +294,9 @@ void FuncStat::print_latency(FuncStat::Latency &latency) {
     floor(log10(sched_cnt + target_cnt + 1)) + 1;
   uint32_t width2 =
     floor(log10(target_avg + 1)) + 1;
+
   printf("trace count: %*lu, average latency: %*lu ns\n",
-          width1, target_cnt, width2, target_avg);
+          width1, target_cnt + latency.unknown_count, width2, target_avg);
   if (opt.offcpu) {
     uint64_t sched_avg =
       target_cnt > 0 ? sched_total / target_cnt : 0;
@@ -314,8 +315,11 @@ void FuncStat::print_child(FuncStat::LatencyChild &child) {
   hist.init_key(child.target, [&](const std::string &name,
         Bucket::Element &el) -> std::string {
     if (name.find(FuncStat::unknown_latency_str) != std::string::npos) {
-      el.err_msg = "WARNING: Return of this child function is not found, "
-                    "you can trace its latency by '-f' directly";
+      char err_msg[256];
+      snprintf(err_msg, 256, "%-10s %-10lu", "unknown", el.count);
+      srcline_map->get(el.name, el.val_str);
+      el.err_msg = std::string(err_msg) + " " + el.val_str +
+                      "  incomplete call/return, trace it directly";
       return funcname_get_name(
           name.substr(FuncStat::unknown_latency_str.size(), name.size()));
     }
@@ -428,7 +432,7 @@ void FuncStat::print() {
 
     /* target function's latency from current caller */
     print_cross_line('=');
-    if (it.first != "unknown") {
+    if (it.first != "unknown" && caller.latency.target.get_count()) {
       snprintf(title, 1024, "Histogram - Latency of [%s]\n"
              								"           called from [%s]:",
              opt.target.c_str(), caller_name.c_str());

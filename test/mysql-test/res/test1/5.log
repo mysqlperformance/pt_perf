@@ -915,16 +915,22 @@ sched count:   0,   sched latency:   0 ns, cpu percent: 1 %
 [ real trace time: 0.01 seconds ]
 [ miss trace time: 0.00 seconds ]
 
-[33m========================================================================================================================[0m
+[33m=========================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [handler::ha_update_row]
+                             called from [Sql_cmd_update::update_single_table(sql_update.cc:997)]:[0m
+               name            : avg        cnt        call_line        sched_time cpu_pct(%) distribution (total) 
+| ha_innobase::update_row      : 14416      46         handler.cc:8107  0          4.71      |********************|
+| handler::mark_trx_read_write : 153        46         handler.cc:8100  0          0.05      |                    |
+| binlog_log_row               : unknown    46         handler.cc:8111  incomplete call/return, trace it directly
+
+[33m=========================================================================================================================[0m
 [32mHistogram - Child functions's Latency of [handler::ha_update_row]
                              called from [unknown(-)]:[0m
                name            : avg        cnt        call_line        sched_time cpu_pct(%) distribution (total) 
-| ha_innobase::update_row      : 13762      50         handler.cc:8107  0          4.88      |********************|
-| handler::mark_trx_read_write : 152        50         handler.cc:8100  0          0.05      |                    |
-| binlog_log_row               : WARNING: Return of this child function is not found, you can trace its latency by 
-                                 '-f' directly
+| ha_innobase::update_row      : 6241       4          handler.cc:8107  0          0.18      |********************|
+| handler::mark_trx_read_write : 134        4          handler.cc:8100  0          0.00      |                    |
 
-[33m========================================================================================================================[0m
+[33m=========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [ha_innobase::update_row]
 /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f ha_innobase::update_row -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
@@ -1178,17 +1184,33 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 0 %
 [ real trace time: 0.02 seconds ]
 [ miss trace time: 0.00 seconds ]
 
-[33m========================================================================================================================[0m
+[33m============================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [row_ins_clust_index_entry_low(row0ins.cc:358)]:[0m
+                   name                : avg        cnt        call_line        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 215        32         btr0cur.cc:3545  0          0.03      |********************|
+| rec_get_offsets                      : 112        32         btr0cur.cc:3535  0          0.02      |**********          |
+| btr_cur_update_in_place              : unknown    32         btr0cur.cc:3551  incomplete call/return, trace it directly
+
+[33m============================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [row_upd_clust_rec(row0upd.cc:2837)]:[0m
+                   name                : avg        cnt        call_line        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 150        68         btr0cur.cc:3545  0          0.05      |********************|
+| rec_get_offsets                      : 140        68         btr0cur.cc:3535  0          0.04      |******************  |
+| btr_cur_update_in_place              : unknown    68         btr0cur.cc:3551  incomplete call/return, trace it directly
+
+[33m============================================================================================================================[0m
 [32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
                              called from [unknown(-)]:[0m
                    name                : avg        cnt        call_line        sched_time cpu_pct(%) distribution (total) 
 | row_upd_changes_field_size_or_extern
-    al                                 : 172        104        btr0cur.cc:3545  0          0.08      |********************|
-| rec_get_offsets                      : 131        104        btr0cur.cc:3535  0          0.06      |***************     |
-| btr_cur_update_in_place              : WARNING: Return of this child function is not found, you can trace its latency by 
-                                         '-f' directly
+    al                                 : 198        4          btr0cur.cc:3545  0          0.00      |********************|
+| rec_get_offsets                      : 137        4          btr0cur.cc:3535  0          0.00      |*************       |
 
-[33m========================================================================================================================[0m
+[33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [btr_cur_update_in_place]
 /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_update_in_place -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]

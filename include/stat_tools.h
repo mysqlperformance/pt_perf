@@ -227,11 +227,15 @@ public:
   struct Latency {
     Distribution target;
     Distribution sched;
+    /* unknown latency count */
+    uint64_t unknown_count;
+    Latency() : unknown_count(0) {}
     void add_target(uint64_t lat) {target.assign_slot(lat);}
     void add_sched(uint64_t lat) {sched.assign_slot(lat);}
     void merge(Latency &lat) {
       target.merge_slots(lat.target);
       sched.merge_slots(lat.sched);
+      unknown_count += lat.unknown_count;
     }
   };
   struct LatencyChild {
@@ -311,6 +315,12 @@ public:
   }
   
   void add(Action &action_call, Action &action_return, uint64_t lat_s, LatencyChild &child);
+
+  void add_unknown_latency(LatencyChild &child, const std::string &caller) {
+    bool gather = (caller != "unknown");
+    add_child_latency(child, caller, gather);
+    if (gather) latency.unknown_count += 1;
+  }
 
   void merge(FuncStat &stat) {
     latency.merge(stat.latency);
