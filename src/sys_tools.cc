@@ -7,6 +7,8 @@
 #include <vector>
 #include <sys/wait.h>
 #include <stdexcept>
+#include <sys/types.h>
+#include <sys/stat.h>
 
 #include "sys_tools.h"
 
@@ -79,21 +81,34 @@ std::string parse_number_range_to_sequence(const std::string &str) {
   return res;
 }
 
+bool create_directory(const std::string &path) {
+  if (mkdir(path.c_str(), 0755)) {
+    printf("ERROR: Directory %s created failed.\n", path.c_str());
+    return true;
+  }
+  return false;
+}
+
+bool check_path_exist(const std::string &path) {
+  FILE *file = fopen(path.c_str(), "r");
+  if (file == nullptr) {
+    return false;
+  }
+  fclose(file);
+  return true;
+}
+
 bool check_system() {
   // first check if intel pt is supported
-  FILE *file = fopen(PT_HOME_PATH, "r");
-  if (file == nullptr) {
+  if (!check_path_exist(PT_HOME_PATH)) {
     printf("ERROR: intel pt is not supported by your cpu architecture, check your cpu model and linux version (>= 4.x).\n");
     return -1;
   }
-  fclose(file);
 
-  file = fopen(PT_IP_FILTER_PATH, "r");
-  if (file == nullptr) {
+  if (!check_path_exist(PT_IP_FILTER_PATH)) {
     printf("ERROR: ip_filtering is not supported by your cpu architecture, check your cpu model and linux version (>= 4.x).\n");
     return -1;
   }
-  fclose(file);
   return 0;
 }
 
@@ -127,13 +142,33 @@ void abort_cmd_killable(int sig) {
   }
 }
 /*
- *  get current directory
+ *  get executor directory
  * */
-std::string get_current_dir() {
+std::string get_executor_dir() {
   char path[1024];
   int len = readlink("/proc/self/exe", path, sizeof(path) - 1);
   path[len] = '\0';
   return std::string(dirname(path));
+}
+
+/*
+ *  get current directory
+ * */
+std::string get_current_dir() {
+  char path[1024];
+  if (!getcwd(path, sizeof(path))) {
+    printf("ERROR: failed to get current directory!\n");
+    exit(1);
+  }
+  return std::string(path);
+}
+
+/* swtch the work directory */
+void switch_work_dir(const std::string &path) {
+  if (chdir(path.c_str())) {
+    printf("ERROR: failed to swithc the work directory!\n");
+    exit(1);
+  }
 }
 
 static int filename_split(char *line, std::string &filename, uint32_t &line_nr)

@@ -46,6 +46,7 @@ struct Param {
   std::string flamegraph;
   std::string scripts_home;
   std::string pt_flame_home;
+  std::string result_dir;
   Param();
 };
 extern Param param;

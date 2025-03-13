@@ -58,6 +58,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -c / --code_block      --- show the code block latency of target function
              --srcline         --- show the address, source file and line number of functions
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
+        -D / --result_dir      --- the result directory to save and use perf.data and temporary files
              --pt_config       --- set config term for intel pt event, currently 'cyc=1' by default
         --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
@@ -193,6 +194,12 @@ sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcli
 
 ```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -s -t -l --history=2
+```
+
+- We can set the result directory (-D=[name]) to save the perf.data, and then we can compare multiple trace data easily.
+
+```shell
+./func_latency -d 10 -p 60416 -t -D "trace1" --history=1
 ```
 
 ### Example

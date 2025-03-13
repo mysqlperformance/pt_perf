@@ -23,8 +23,8 @@ static SrclineMap srcline_map;
 static ParallelWorkerPool worker_pool;
 
 Param::Param() {
-  perf_tool = get_current_dir() + "/perf";
-  perf_dlfilter = get_current_dir() + "/perf_dlfilter.so";
+  perf_tool = get_executor_dir() + "/perf";
+  perf_dlfilter = get_executor_dir() + "/perf_dlfilter.so";
   binary = "";
   target = "";
   trace_time = 0.01;
@@ -55,8 +55,9 @@ Param::Param() {
   history = 0;
 
   flamegraph = "";
-  scripts_home = get_current_dir() + "/scripts";
+  scripts_home = get_executor_dir() + "/scripts";
   pt_flame_home = "/usr/share/pt_flame";
+  result_dir = "";
 }
 
 struct option opts[] = {
@@ -82,6 +83,7 @@ struct option opts[] = {
   {"ancestor", 1, NULL, 'a'},
   {"pt_config", 1, NULL, '5'},
   {"script_format", 1, NULL, '6'},
+  {"result_dir", 1, NULL, 'D'},
   {"code_block", 0, NULL, 'c'},
   {"offcpu", 0, NULL, 'o'},
   {"per_thread", 0, NULL, 't'},
@@ -91,7 +93,7 @@ struct option opts[] = {
   {"help", 0, NULL, 'h'},
   {NULL, 0, NULL, 0}
 };
-const char *opt_str = "hvsitolcb:f:d:p:T:C:P:a:w:I:F:";
+const char *opt_str = "hvsitolcb:f:d:p:T:C:P:a:w:I:F:D:";
 
 static void usage() {
   printf(
@@ -117,6 +119,7 @@ static void usage() {
     "\t                           where its ancestor latency is between 100ns and 200 ns.\n"
     "\t-c / --code_block      --- show the code block latency of target function\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
+    "\t-D / --result_dir      --- the result directory to save and use perf.data and temporary files\n"
     "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
@@ -854,7 +857,7 @@ int main(int argc, char *argv[]) {
         int sep2 = str.find_last_of(',');
         if (sep1 == string::npos || sep1 == sep2) {
           printf("ERROR: wrong time_interval format!\n");
-          exit(0);
+          exit(1);
         }
         param.time_start = str2long(str.substr(0, sep1));
         param.time_interval.first =
@@ -877,6 +880,14 @@ int main(int argc, char *argv[]) {
         if (script_format == "text") {
           param.compact_format = false;
         }
+        break;}
+      case 'D' : {
+        string dir = string(optarg);
+        if (!check_path_exist(dir) && create_directory(dir)) {
+          printf("ERROR: Failed to create result directory!\n");
+          exit(1);
+        }
+        param.result_dir = dir;
         break;}
       case 'c':
         param.code_block = true;
@@ -940,6 +951,9 @@ int main(int argc, char *argv[]) {
     param.compact_format,
     param.history,
     param.verbose};
+
+  if (param.result_dir != "")
+    switch_work_dir(param.result_dir);
 
   // perf record
   perf_option.intel_pt_config = "intel_pt/" + param.pt_config +

@@ -66,9 +66,13 @@ int str2int(const std::string &str);
 std::pair<uint64_t, uint64_t> get_interval_from_string(const std::string &str);
 std::string parse_number_range_to_sequence(const std::string &str);
 size_t get_file_linecount(const std::string &path);
+bool check_path_exist(const std::string &path);
+bool create_directory(const std::string &path);
 bool check_system();
 bool check_pt_flame(const std::string &pt_flame_home);
+std::string get_executor_dir();
 std::string get_current_dir();
+void switch_work_dir(const std::string &path);
 void addr2line(const std::string &binary,
                uint64_t address,
                std::string &filename,

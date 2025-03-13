@@ -53,6 +53,7 @@ Linux version 5.10+ is required for IP filtering when tracing
         -c / --code_block      --- show the code block latency of target function
              --srcline         --- show the address, source file and line number of functions
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
+        -D / --result_dir      --- the result directory to save and use perf.data and temporary files
              --pt_config       --- set config term for intel pt event, currently 'cyc=1' by default
         --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)
@@ -190,17 +191,23 @@ sudo ./func_latency -b bin/mysqld -f "do_command" -d 1 -p 60416 -s -i -t --srcli
 
 #### 场景四：历史数据分析。
 
-  * trace 数据 (--history=1)，相当于 perf record 保存数据在 perf.data 中。可以将 perf.data 和带有调试信息的程序二进制拷贝到其他机器进行分析。
+* trace 数据 (--history=1)，相当于 perf record 保存数据在 perf.data 中。可以将 perf.data 和带有调试信息的程序二进制拷贝到其他机器进行分析。
 
-  ```shell
+```shell
 ./func_latency -d 10 -p 60416 -t --history=1
-  ```
+```
 
-  * 使用 perf.data，并分析 trace 数据 (--history=2)，可以用前面所有场景分析，通过 -T 查看指定某个线程的 trace。
+* 使用 perf.data，并分析 trace 数据 (--history=2)，可以用前面所有场景分析，通过 -T 查看指定某个线程的 trace。
 
-  ```shell
+```shell
 ./func_latency -b bin/mysqld -f "do_command" -d 1 -s -t -l --history=2
-  ```
+```
+
+* 我们可以指定保存和使用 perf.data 的目录 (-D=[name])，这样我们可以很方便的比较多个不同的 trace 结果，发现不同时刻程序的运行差异。
+
+```shell
+./func_latency -d 10 -p 60416 -t -D "trace1" --history=1
+```
 
 ### Example
 
