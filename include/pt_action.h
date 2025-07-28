@@ -130,6 +130,9 @@ inline uint64_t funcname_get_addr(const std::string &name) {
     return 0;
   return stoull(name.substr(sep + 1, name.size() - sep + 1));
 }
+inline void funcname_add_string_mark(std::string &name, const std::string &str) {
+  name += ("!" + str);
+}
 inline std::string funcname_get_name(const std::string &name) {
   size_t sep = name.find_last_of('!');
   if (sep == std::string::npos)

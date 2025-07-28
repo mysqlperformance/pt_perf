@@ -47,6 +47,10 @@ struct Param {
   std::string scripts_home;
   std::string pt_flame_home;
   std::string result_dir;
+
+  bool unfold_gathered_line;
+
+  std::string sub_command;
   Param();
 };
 extern Param param;

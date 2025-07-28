@@ -54,6 +54,9 @@ Linux version 5.10+ is required for IP filtering when tracing
              --srcline         --- show the address, source file and line number of functions
              --history         --- for history trace, 1: generate perf.data, 2: use perf.data
         -D / --result_dir      --- the result directory to save and use perf.data and temporary files
+        -U / --unfold_gathered_line
+                               --- unfold the call-line which gathered for simplicity, like interrupts that
+                                   may be called from multiple locations
              --pt_config       --- set config term for intel pt event, currently 'cyc=1' by default
         --li/--latency_interval--- show the trace between the latency interval (ns), format: "min,max"
         -v / --verbose         --- verbose, be more verbose (show debug message, etc)

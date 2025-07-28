@@ -43,6 +43,8 @@
 #include <linux/string.h>
 #include <linux/zalloc.h>
 
+#include "comm.h"
+
 static void __machine__remove_thread(struct machine *machine, struct thread *th, bool lock);
 
 static struct dso *machine__kernel_dso(struct machine *machine)
@@ -1857,6 +1859,34 @@ out_problem:
 	return -1;
 }
 
+static bool is_thread_exec_path(struct thread *thread,
+		const char *filename) {
+	struct comm *comm;
+	char *base, *lname;
+	char *base2, *lname2;
+
+	comm = thread__exec_comm(thread);
+
+	if (!filename || !comm || !comm->comm_str) {
+		return false;
+	}
+
+	lname = strdup(filename);
+	lname2 = strdup(comm__str(comm));
+	if (!lname || !lname2) {
+		return false;
+	}
+	base = basename(lname);
+	base2 = basename(lname2);
+	if (!strcmp(base, base2)) {
+		return true;
+	}
+
+	free(lname);
+	free(lname2);
+	return false;
+
+}
 int machine__process_mmap2_event(struct machine *machine,
 				 union perf_event *event,
 				 struct perf_sample *sample)
@@ -1871,6 +1901,7 @@ int machine__process_mmap2_event(struct machine *machine,
 	};
 	struct build_id __bid, *bid = NULL;
 	int ret = 0;
+	char *filename;
 
 	if (dump_trace)
 		perf_event__fprintf_mmap2(event, stdout);
@@ -1900,11 +1931,18 @@ int machine__process_mmap2_event(struct machine *machine,
 	if (thread == NULL)
 		goto out_problem;
 
+	filename = event->mmap2.filename;
+	if (is_thread_exec_path(thread, filename) &&
+			is_thread_exec_path(thread, opt_dso_name)) {
+		/* if there exist filename with the same as exec file
+		 * we may also replace it, but it doesn't master */
+		filename = (char *) opt_dso_name;
+	}
 	map = map__new(machine, event->mmap2.start,
 			event->mmap2.len, event->mmap2.pgoff,
 			&dso_id, event->mmap2.prot,
 			event->mmap2.flags, bid,
-			event->mmap2.filename, thread);
+			filename, thread);
 
 	if (map == NULL)
 		goto out_problem_map;

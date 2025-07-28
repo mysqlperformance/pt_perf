@@ -17,6 +17,14 @@ const std::string sys_sched_funcname_419 = "__sched_text_start";
 #define ut_time_now() std::chrono::steady_clock::now()
 #define ut_time_diff(t2, t1) std::chrono::duration<double>(t2 - t1).count()
 
+#ifdef __GNUC__
+#define likely(x) __builtin_expect((x), 1)
+#define unlikely(x) __builtin_expect((x), 0)
+#else
+#define likely(x) (x)
+#define unlikely(x) (x)
+#endif
+
 class RwSpinLock {
 public:
   RwSpinLock() : m_word(WRITE) {};
@@ -73,6 +81,7 @@ bool check_pt_flame(const std::string &pt_flame_home);
 std::string get_executor_dir();
 std::string get_current_dir();
 void switch_work_dir(const std::string &path);
+std::string resolve_path(const std::string &path);
 void addr2line(const std::string &binary,
                uint64_t address,
                std::string &filename,
@@ -82,4 +91,7 @@ void addr2line(const std::string &binary,
                std::vector<uint64_t> &address_vec,
                std::vector<std::string> &filename_vec,
                std::vector<uint> &line_nr_vec);
+
+std::string parse_sub_command(int argc, char *argv[]);
+
 #endif

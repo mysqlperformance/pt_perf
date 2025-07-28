@@ -19,7 +19,9 @@ void perf_record(PerfOption &opt) {
 
   cmd << opt.perf_tool << " record -e " << opt.intel_pt_config << " -B " << opt.record_filter << " ";
 
-  if (opt.cpu != "") {
+  if (opt.sub_command != "") {
+    printf("[ trace and execute command: %s ]\n", opt.sub_command.c_str());
+  } else if (opt.cpu != "") {
     cmd << " -C " << opt.cpu;
     printf("[ trace cpu %s for %.2f seconds ]\n", opt.cpu.c_str(), opt.trace_time);
   } else if (opt.tid != "") {
@@ -37,7 +39,12 @@ void perf_record(PerfOption &opt) {
     cmd << " --per-thread --timestamp ";
   }
 
-  cmd << " -m,32M --no-bpf-event -- sleep " << opt.trace_time;
+  cmd << " -m,32M --no-bpf-event ";
+  if (opt.sub_command != "") {
+    cmd << " -- " << opt.sub_command;
+  } else {
+    cmd << " -- sleep " << opt.trace_time;
+  }
 
   if (opt.verbose) printf("%s\n", cmd.str().c_str());
 
@@ -50,7 +57,7 @@ void perf_record(PerfOption &opt) {
 
   if (opt.history == 1) {
     printf("[ trace done, you can copy perf.data and the binary file \n"
-           "  (with the same absolute path) to another machine for analysis. ]\n");
+           "to another machine for analysis. ]\n");
     exit(0);
   }
 }

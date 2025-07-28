@@ -9,6 +9,8 @@
 #include <stdexcept>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <cstring>
+#include <pwd.h>
 
 #include "sys_tools.h"
 
@@ -258,3 +260,66 @@ void addr2line(const std::string &binary,
   free(line);
   pclose(a2l);
 }
+
+std::string parse_sub_command(int argc, char *argv[]) {
+  std::string ret = "";
+  for (int i = 0; i < argc; ++i) {
+    if (!strcmp(argv[i], "--")) {
+      for (int j = i + 1; j < argc; ++j) {
+        ret += (" " + std::string(argv[j]));
+      }
+      break;
+    }
+  }
+  return ret;
+}
+
+static std::string expand_home_path(const std::string &path) {
+  if (path.empty() || path[0] != '~') {
+    return path;
+  }
+
+  size_t slash_pos = path.find('/');
+  std::string username = path.substr(1, slash_pos - 1);
+  const char* home = nullptr;
+  if (username.empty()) {
+    // current user
+    home = std::getenv("HOME");
+    if (!home) {
+      uid_t uid = getuid();
+      struct passwd* pw = getpwuid(uid);
+      if (pw) {
+        home = pw->pw_dir;
+      }
+    }
+  } else {
+    struct passwd* pw = getpwnam(username.c_str());
+    if (pw) {
+      home = pw->pw_dir;
+    }
+  }
+  if (!home) {
+    return path;
+  }
+  return std::string(home) +
+    (slash_pos == std::string::npos ? "" : path.substr(slash_pos));
+}
+
+std::string resolve_path(const std::string &path) {
+  std::string expanded_path = expand_home_path(path);
+
+  if (!check_path_exist(expanded_path)) {
+    return expanded_path;
+  }
+
+  char* resolved_path = realpath(expanded_path.c_str(), nullptr);
+
+  if (!resolved_path) {
+    return expanded_path;
+  }
+
+  std::string absolute_path = std::string(resolved_path);
+  free(resolved_path);
+  return absolute_path;
+}
+

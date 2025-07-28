@@ -54,6 +54,7 @@
 #define INTEL_PT_CFG_TNT_DIS	BIT_ULL(55)
 
 extern struct symbol fil_syms[];
+extern size_t func_filter_num;
 extern size_t fil_syms_size;
 static size_t current_decode_cpu = (size_t)-2;
 static size_t current_decode_tid = (size_t)-2;
@@ -1816,6 +1817,7 @@ static int intel_pt_deliver_synth_event(struct intel_pt *pt,
 	return ret;
 }
 
+/* ========================= for pt_perf to filter ip ===========================*/
 static int intel_pt_parse_ip(struct intel_pt_queue *ptq, uint64_t ip, struct addr_location *al) {
 	// transfer to dso's addr
 	struct thread *thread;
@@ -1858,72 +1860,110 @@ static int intel_pt_parse_ip(struct intel_pt_queue *ptq, uint64_t ip, struct add
 static int intel_pt_parse_sym(struct intel_pt_queue *ptq, uint64_t ip, struct addr_location *al) {
 	if (intel_pt_parse_ip(ptq, ip, al))
 		return -EINVAL;
-  al->sym = map__find_symbol(al->map, al->addr);
-  return 0;
+	al->sym = map__find_symbol(al->map, al->addr);
+	return 0;
+}
+
+static bool intel_pt_is_schedule_func(struct addr_location *al) {
+	if (!al->sym) {
+		return false;
+	}
+	if (strcmp(al->sym->name, "__schedule") &&
+			strcmp(al->sym->name, "__sched_text_start")) {
+		return false;
+	}
+	return true;
+}
+
+static bool intel_pt_is_target_func_name(struct addr_location *al) {
+	if (!al->sym) {
+		return false;
+	}
+	if (!func_filter_match(al->sym->name)) {
+		return false;
+	}
+	return true;
+}
+
+static bool intel_pt_is_target_func_ip(struct addr_location *al) {
+	bool has_target = false;
+	for (size_t i = 0; i < fil_syms_size; ++i) {
+		if (fil_syms[i].start <= al->addr && fil_syms[i].end >= al->addr) {
+				has_target = true;
+				break;
+		}
+	}
+	return has_target;
 }
 
 static bool intel_pt_func_filter_by_sym(
      struct addr_location *from_al,
      struct addr_location *to_al,
-     struct intel_pt_queue *ptq,
-     struct perf_sample *sample) {
+     struct intel_pt_queue *ptq) {
 	from_al->addr = to_al->addr = 0;
 	from_al->sym = to_al->sym = NULL;
-	intel_pt_parse_sym(ptq, sample->ip, from_al);
-	intel_pt_parse_sym(ptq, sample->addr, to_al);
-	if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
+	intel_pt_parse_sym(ptq, ptq->state->from_ip, from_al);
+	intel_pt_parse_sym(ptq, ptq->state->to_ip, to_al);
+	if (intel_pt_is_target_func_name(from_al)
+		|| intel_pt_is_target_func_name(to_al)) {
+		return false;
+	} else if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
 		/* for schedule function of kernel */
-		if ((!from_al->sym || (strcmp(from_al->sym->name, "__schedule")
-				&& strcmp(from_al->sym->name, "__sched_text_start")))
-				&& (!to_al->sym || (strcmp(to_al->sym->name, "__schedule")
-				&& strcmp(to_al->sym->name, "__sched_text_start")))) {
-			return true;
+		if (intel_pt_is_schedule_func(from_al)
+				|| intel_pt_is_schedule_func(to_al)) {
+			return false;
 		}
-	} else if ((!from_al->sym || !func_filter_match(from_al->sym->name))
-		&& (!to_al->sym || !func_filter_match(to_al->sym->name))) {
-		return true;
 	}
-	return false;
+	return true;
 }
 
 static bool intel_pt_func_filter_by_ip(
      struct addr_location *from_al,
      struct addr_location *to_al,
-     struct intel_pt_queue *ptq,
-     struct perf_sample *sample) {
-	bool has_target;
+     struct intel_pt_queue *ptq) {
 	from_al->addr = to_al->addr = 0;
-	intel_pt_parse_ip(ptq, sample->ip, from_al);
-	intel_pt_parse_ip(ptq, sample->addr, to_al);
-	if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
+	intel_pt_parse_ip(ptq, ptq->state->from_ip, from_al);
+	intel_pt_parse_ip(ptq, ptq->state->to_ip, to_al);
+
+	if (intel_pt_is_target_func_ip(from_al) ||
+				intel_pt_is_target_func_ip(to_al)) {
+			return false;
+	} else if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
 		from_al->sym = to_al->sym = NULL;
-		intel_pt_parse_sym(ptq, sample->ip, from_al);
-		intel_pt_parse_sym(ptq, sample->addr, to_al);
+		intel_pt_parse_sym(ptq, ptq->state->from_ip, from_al);
+		intel_pt_parse_sym(ptq, ptq->state->to_ip, to_al);
 		/* for schedule function of kernel */
-		if ((!from_al->sym || (strcmp(from_al->sym->name, "__schedule")
-				&& strcmp(from_al->sym->name, "__sched_text_start")))
-				&& (!to_al->sym || (strcmp(to_al->sym->name, "__schedule")
-				&& strcmp(to_al->sym->name, "__sched_text_start")))) {
-			return true;
-		}
-	} else {
-		has_target = false;
-		for (size_t i = 0; i < fil_syms_size; ++i) {
-			if ((fil_syms[i].start <= from_al->addr && fil_syms[i].end >= from_al->addr)
-					|| (fil_syms[i].start <= to_al->addr && fil_syms[i].end >= to_al->addr)) {
-					has_target = true;
-					break;
-			}
-		}
-		if (!has_target) {
-			return true;
+		if (intel_pt_is_schedule_func(from_al)
+				|| intel_pt_is_schedule_func(to_al)) {
+			return false;
 		}
 	}
-	return false;
+	return true;
 }
 
+static int intel_pt_synth_branch_sample_low(struct intel_pt_queue *ptq);
 static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 {
+	// thread filter
+	if (thread__is_filter_by_tid(ptq->tid)) {
+		return 0;
+	}
+
+	// function filter
+	if (strlen(func_filter_str) > 0) {
+		struct addr_location from_al, to_al;
+		if (fil_syms_size > 0 &&
+				intel_pt_func_filter_by_ip(&from_al, &to_al, ptq)) {
+			return 0;
+		} else if (intel_pt_func_filter_by_sym(&from_al, &to_al, ptq)){
+			return 0;
+		}
+	}
+	return intel_pt_synth_branch_sample_low(ptq);
+}
+/* ========================= END: for pt_perf to filter ip ===========================*/
+
+static int intel_pt_synth_branch_sample_low(struct intel_pt_queue *ptq) {
 	struct intel_pt *pt = ptq->pt;
 	union perf_event *event = ptq->event_buf;
 	struct perf_sample sample = { .ip = 0, };
@@ -1943,21 +1983,6 @@ static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 
 	sample.id = ptq->pt->branches_id;
 	sample.stream_id = ptq->pt->branches_id;
-
-	// thread filter
-	if (thread__is_filter_by_tid(sample.tid)) {
-		return 0;
-	}
-
-	// function filter
-	if (strlen(func_filter_str) > 0) {
-		struct addr_location from_al, to_al;
-		if (fil_syms_size > 0 && intel_pt_func_filter_by_ip(&from_al, &to_al, ptq, &sample)) {
-			return 0;
-		} else if (intel_pt_func_filter_by_sym(&from_al, &to_al, ptq, &sample)){
-			return 0;
-		}
-	}
 
 	/*
 	 * perf report cannot handle events without a branch stack when using

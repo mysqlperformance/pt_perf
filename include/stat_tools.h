@@ -207,6 +207,7 @@ private:
 using namespace pt;
 #define TARGET_SELF "*self"
 #define CODE_BLOCK_PREFIX  "*code block: "
+#define GATHER_CALL_LINE "[gather_call_line]"
 
 class FuncStat {
 public:
@@ -333,6 +334,7 @@ public:
   }
 
   void init_print_width();
+  void add_addr_from_funcname(const std::string &name);
   void generate_srcline();
   void print_latency(FuncStat::Latency &latency);
   void print_child(FuncStat::LatencyChild &child);

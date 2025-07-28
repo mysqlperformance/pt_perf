@@ -58,6 +58,9 @@ Param::Param() {
   scripts_home = get_executor_dir() + "/scripts";
   pt_flame_home = "/usr/share/pt_flame";
   result_dir = "";
+  unfold_gathered_line = false;
+
+  sub_command = "";
 }
 
 struct option opts[] = {
@@ -84,6 +87,7 @@ struct option opts[] = {
   {"pt_config", 1, NULL, '5'},
   {"script_format", 1, NULL, '6'},
   {"result_dir", 1, NULL, 'D'},
+  {"unfold_gathered_line", 0, NULL, 'U'},
   {"code_block", 0, NULL, 'c'},
   {"offcpu", 0, NULL, 'o'},
   {"per_thread", 0, NULL, 't'},
@@ -93,7 +97,7 @@ struct option opts[] = {
   {"help", 0, NULL, 'h'},
   {NULL, 0, NULL, 0}
 };
-const char *opt_str = "hvsitolcb:f:d:p:T:C:P:a:w:I:F:D:";
+const char *opt_str = "hvsitolcUb:f:d:p:T:C:P:a:w:I:F:D:";
 
 static void usage() {
   printf(
@@ -120,6 +124,9 @@ static void usage() {
     "\t-c / --code_block      --- show the code block latency of target function\n"
     "\t     --history         --- for history trace, 1: generate perf.data, 2: use perf.data \n"
     "\t-D / --result_dir      --- the result directory to save and use perf.data and temporary files\n"
+    "\t-U / --unfold_gathered_line\n"
+    "\t                       --- unfold the call-line which gathered for simplicity, like interrupts that\n"
+    "\t                           may be called from multiple locations\n"
     "\t--li/--latency_interval--- show the trace between the latency interval (ns), format: \"min,max\" \n"
     "\t-v / --verbose         --- verbose, be more verbose (show debug message, etc)\n"
     "\t-h / --help            --- show this help\n"
@@ -156,6 +163,7 @@ static void dump_options() {
       param.time_interval.first, param.time_interval.second);
   printf("latency_interval: %llu - %llu\n",
       param.latency_interval.first, param.latency_interval.second);
+  printf("sub_command: %s\n", param.sub_command.c_str());
 }
 
 void ThreadJob::do_analyze() {
@@ -190,20 +198,25 @@ void ThreadJob::do_analyze() {
   };
 
   /* add one child function latency */
-  auto add_one_child = [&](Action *a1, Action *a2, bool unknown = false) {
+  auto add_one_child = [&](Action *a1, Action *a2,
+      bool unknown = false, bool gather_call_line = false) {
     std::string child_name = a1->to->name;
     /* for "to" symbol, attach call address to
      * the tail of funcname */
-    if (param.call_line && static_cast<int64_t>(a1->to->addr) > 0
-        && child_name != param.target
-        && child_name != param.ancestor) {
-      // show the source line of the call address
-      funcname_add_addr(child_name, a1->from->addr);
+
+    if (likely(param.call_line)) {
+      if (unlikely(gather_call_line) && !param.unfold_gathered_line) {
+        funcname_add_string_mark(child_name, GATHER_CALL_LINE);
+      } else if (child_name != param.target
+          && child_name != param.ancestor) {
+        // show the source line of the call address
+        funcname_add_addr(child_name, a1->from->addr);
+      }
     }
 
     uint64_t lat_t = a2->ts - a1->ts;
     uint64_t lat_s = sched_in_child;
-    if (unknown) {
+    if (unlikely(unknown)) {
       child_name = FuncStat::unknown_latency_str + child_name;
       lat_t = lat_s = 0;
     }
@@ -419,8 +432,9 @@ void ThreadJob::do_analyze() {
           stack.clear();
         } else if (!stack.empty() && stack.back().from_target
             && action.type != PT_ACTION_TR_END_RETURN) {
+          bool gather_call_line = (action.type == PT_ACTION_IRET);
           /* for non-ipfiltering, return to target function from child function */
-          add_one_child(&stack.back(), &action);
+          add_one_child(&stack.back(), &action, false, gather_call_line);
           stack.pop_back();
         } else {
           // wrong chain, discard it
@@ -430,7 +444,8 @@ void ThreadJob::do_analyze() {
         }
         break;
       default:
-        abort();
+        printf("ERROR: unknown action at timestamp %llu\n", action.ts);
+        break;
     }
     cursor = &action;
   }
@@ -758,11 +773,11 @@ static void check_parameter() {
   if (param.verbose) dump_options();
 
   if (system("addr2line --help &> /dev/null")) {
-    printf("Warning: addr2line command not found, run without srcline.\n");
+    printf("Warning: addr2line command not found, run without src_line/call_line.\n");
     param.call_line = false;
   }
   if (param.binary == "") {
-    printf("Warning: binary path is empty, run without srcline.\n");
+    printf("Warning: binary path is empty, run without src_line/call_line.\n");
     param.call_line = false;
   }
   if (param.ancestor == param.target) {
@@ -813,12 +828,14 @@ int main(int argc, char *argv[]) {
   if (check_system()) exit(-1);
 
   signal(SIGINT, sig_handler);
-  
+
+  param.sub_command = parse_sub_command(argc, argv);;
+
   int c;
   while (-1 != (c = getopt_long(argc, argv, opt_str, opts, NULL))) {
     switch (c) {
       case 'b':
-        param.binary = string(optarg);
+        param.binary = resolve_path(string(optarg));
         break;
       case 'f':
         param.target = string(optarg);
@@ -921,6 +938,9 @@ int main(int argc, char *argv[]) {
       case 's':
         param.parallel_script = true;
         break;
+      case 'U':
+        param.unfold_gathered_line = true;
+        break;
       case 'v':
         param.verbose = true;
         break;
@@ -949,6 +969,7 @@ int main(int argc, char *argv[]) {
     "be",
     param.worker_num,
     param.compact_format,
+    param.sub_command,
     param.history,
     param.verbose};
 

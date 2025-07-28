@@ -111,9 +111,15 @@ void HistogramBucket::print() {
       continue;
     }
     /* 2. print avg and cnt */
-    string print_flag = (avg >= INTEGER_TEN_ZEROS) ?
-                      "%-10lu %-7uE10" : "%-10lu %-10lu";
-    printf(print_flag.c_str(), avg, el.count);
+    if (avg >= INTEGER_TEN_ZEROS) {
+      string notation =
+        std::to_string(avg*10/INTEGER_TEN_ZEROS) + "e9";
+      string print_flag = "%-10s %-10lu";
+      printf(print_flag.c_str(), notation.c_str(), el.count);
+    } else {
+      string print_flag = "%-10lu %-10lu";
+      printf(print_flag.c_str(), avg, el.count);
+    }
     /* 3. print each bucket */
     for (Bucket *bucket : extra_buckets) {
       if (bucket->slots.count(name)) {
@@ -336,6 +342,8 @@ void FuncStat::print_child(FuncStat::LatencyChild &child) {
         srcline_map->get(el.name + "_from", srcline_from);
         srcline_map->get(el.name + "_to", srcline_to);
         el.val_str = srcline_from + "-" + srcline_to;
+      } else if (el.name.find(GATHER_CALL_LINE) != string::npos) {
+        el.val_str = "[gathered]";
       } else if (el.name == TARGET_SELF) {
         srcline_map->get(opt.target, el.val_str);
       } else {
@@ -362,26 +370,28 @@ void FuncStat::print_child(FuncStat::LatencyChild &child) {
   hist.print();
 }
 
+void FuncStat::add_addr_from_funcname(const std::string &name) {
+  if (name.find(GATHER_CALL_LINE) != string::npos) {
+    return;
+  }
+  uint64_t addr = funcname_get_addr(name);
+  if (addr > 0) {
+    srcline_map->put(name, addr);
+  }
+}
+
 void FuncStat::generate_srcline() {
   // put all callers
   for (auto it = callers.begin(); it != callers.end(); ++it) {
     LatencyCaller &caller = it->second;
-    std::string name = it->first;
-    uint64_t addr = funcname_get_addr(name);
-    if (addr > 0) {
-      srcline_map->put(name, addr);
-		}
+    add_addr_from_funcname(it->first);
     caller.children.target.loop_for_element([&](Bucket::Element &el){
-      uint64_t addr = funcname_get_addr(el.name);
-      if (addr > 0)
-        srcline_map->put(el.name, addr);
+        add_addr_from_funcname(el.name);
     });
   }
   // put all children
   children.target.loop_for_element([&](Bucket::Element &el){
-    uint64_t addr = funcname_get_addr(el.name);
-    if (addr > 0)
-      srcline_map->put(el.name, addr);
+      add_addr_from_funcname(el.name);
   });
   // generate srcline
   srcline_map->process_address();

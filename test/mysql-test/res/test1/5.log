@@ -1,5 +1,5 @@
 %%%%%%%%%%%%% test text case [do_command]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f do_command -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f do_command -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 47062 actions, trace errors: 0 ]
 [ real trace time: 0.03 seconds ]
@@ -76,7 +76,7 @@ sched count: 1261,   sched latency:  14842 ns, cpu percent: 339 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [dispatch_command]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f dispatch_command -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f dispatch_command -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 34575 actions, trace errors: 0 ]
 [ real trace time: 0.01 seconds ]
@@ -201,7 +201,7 @@ sched count:   2,   sched latency:    16 ns, cpu percent: 313 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [mysqld_stmt_execute]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f mysqld_stmt_execute -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f mysqld_stmt_execute -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 14525 actions, trace errors: 0 ]
 [ real trace time: 0.01 seconds ]
@@ -266,7 +266,7 @@ sched count:   0,   sched latency:     0 ns, cpu percent: 251 %
 
 [33m===========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [mysql_execute_command]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f mysql_execute_command -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f mysql_execute_command -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 43380 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
@@ -468,7 +468,7 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 0 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [open_tables_for_query]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f open_tables_for_query -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f open_tables_for_query -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 19103 actions, trace errors: 0 ]
 [ real trace time: 0.03 seconds ]
@@ -515,7 +515,7 @@ sched count:    0,   sched latency:    0 ns, cpu percent: 13 %
 
 [33m========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [Sql_cmd_dml::execute]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f Sql_cmd_dml::execute -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f Sql_cmd_dml::execute -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 40657 actions, trace errors: 0 ]
 [ real trace time: 0.03 seconds ]
@@ -614,7 +614,7 @@ sched count:    0,   sched latency:     0 ns, cpu percent: 221 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [row_search_mvcc]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_search_mvcc -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_search_mvcc -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 298625 actions, trace errors: 0 ]
 [ real trace time: 0.01 seconds ]
@@ -760,7 +760,7 @@ sched count:    0,   sched latency:   0 ns, cpu percent: 23 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [rec_get_offsets_func]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f rec_get_offsets_func -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f rec_get_offsets_func -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 7248 actions, trace errors: 0 ]
 [ real trace time: 0.03 seconds ]
@@ -768,7 +768,7 @@ sched count:    0,   sched latency:   0 ns, cpu percent: 23 %
 
 [33m========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [row_sel_store_mysql_rec]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_sel_store_mysql_rec -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_sel_store_mysql_rec -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 183531 actions, trace errors: 0 ]
 [ real trace time: 0.04 seconds ]
@@ -838,7 +838,7 @@ sched count:    0,   sched latency:   0 ns, cpu percent: 0 %
 
 [33m========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [Optimize_table_order::choose_table_order]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f Optimize_table_order::choose_table_order -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f Optimize_table_order::choose_table_order -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 7165 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
@@ -909,7 +909,7 @@ sched count:   0,   sched latency:   0 ns, cpu percent: 1 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [handler::ha_update_row]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f handler::ha_update_row -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f handler::ha_update_row -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 3671 actions, trace errors: 0 ]
 [ real trace time: 0.01 seconds ]
@@ -932,7 +932,7 @@ sched count:   0,   sched latency:   0 ns, cpu percent: 1 %
 
 [33m=========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [ha_innobase::update_row]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f ha_innobase::update_row -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f ha_innobase::update_row -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 5211 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
@@ -991,7 +991,7 @@ sched count:  0,   sched latency:     0 ns, cpu percent: 5 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [row_upd_step]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_upd_step -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_upd_step -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 11420 actions, trace errors: 0 ]
 [ real trace time: 0.03 seconds ]
@@ -1048,7 +1048,7 @@ sched count:   0,   sched latency:     0 ns, cpu percent: 6 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [row_upd_clust_step]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_upd_clust_step -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_upd_clust_step -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 5730 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
@@ -1115,7 +1115,7 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 3 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [row_upd_clust_rec]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_upd_clust_rec -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f row_upd_clust_rec -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 6644 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
@@ -1178,7 +1178,7 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 0 %
 
 [33m========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [btr_cur_optimistic_update]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_optimistic_update -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_optimistic_update -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 5474 actions, trace errors: 0 ]
 [ real trace time: 0.02 seconds ]
@@ -1212,7 +1212,7 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 0 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [btr_cur_update_in_place]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_update_in_place -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_update_in_place -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 10580 actions, trace errors: 0 ]
 [ real trace time: 0.04 seconds ]
@@ -1284,7 +1284,7 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 0 %
 
 [33m============================================================================================================================[0m
 %%%%%%%%%%%%% test text case [log_writer]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f log_writer -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f log_writer -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 1060669 actions, trace errors: 0 ]
 [ real trace time: 0.04 seconds ]
@@ -1305,7 +1305,7 @@ sched count:  0,   sched latency:    0 ns, cpu percent: 0 %
 
 [33m========================================================================================================================[0m
 %%%%%%%%%%%%% test text case [os_file_write_page]
-/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f os_file_write_page -d 0.01 -s -t -o -w 5 --script_format=text --history=3
+/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f os_file_write_page -d 0.01 -s -t -o -w 5 --script_format=text --history=3
 [ start 5 parallel workers ]
 [ parsed 5430 actions, trace errors: 0 ]
 [ real trace time: 0.01 seconds ]

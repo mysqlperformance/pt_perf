@@ -24,6 +24,7 @@ struct PerfOption {
   std::string itrace;
   size_t worker_num;
   bool compact_format;
+  std::string sub_command;
 
   int history;
   bool verbose;
