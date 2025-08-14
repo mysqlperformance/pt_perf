@@ -62,6 +62,8 @@
 #include "util/cgroup.h"
 #include "perf.h"
 
+#include "include/perf/pt_compact_format.h"
+
 #include <linux/ctype.h>
 #ifdef HAVE_LIBTRACEEVENT
 #include <traceevent/event-parse.h>
@@ -1620,6 +1622,32 @@ static struct {
 	{0, NULL}
 };
 
+static struct {
+	u32 flags;
+	u8 flags_new;
+} sample_flags_new[]= {
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL, PT_ACTION_CALL},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_RETURN, PT_ACTION_RETURN},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CONDITIONAL, PT_ACTION_JCC},
+	{PERF_IP_FLAG_BRANCH, PT_ACTION_JMP},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_TRACE_BEGIN, PT_ACTION_TR_START},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_TRACE_END, PT_ACTION_TR_END_CALL},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_RETURN | PERF_IP_FLAG_TRACE_END, PT_ACTION_TR_END_RETURN},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_ASYNC |	PERF_IP_FLAG_INTERRUPT | PERF_IP_FLAG_TRACE_END, PT_ACTION_TR_END_HW_INT},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_SYSCALLRET | PERF_IP_FLAG_TRACE_END, PT_ACTION_TR_END_SYSCALL},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_TRACE_END, PT_ACTION_TR_END},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_INTERRUPT, PT_ACTION_INT},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_RETURN | PERF_IP_FLAG_INTERRUPT, PT_ACTION_IRET},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_SYSCALLRET, PT_ACTION_SYSCALL},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_RETURN | PERF_IP_FLAG_SYSCALLRET, PT_ACTION_SYSRET},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_ASYNC, PT_ACTION_ASYNC},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_ASYNC |	PERF_IP_FLAG_INTERRUPT, PT_ACTION_HW_INT},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_TX_ABORT, PT_ACTION_TX_ABRT},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_VMENTRY, PT_ACTION_VMENTRY},
+	{PERF_IP_FLAG_BRANCH | PERF_IP_FLAG_CALL | PERF_IP_FLAG_VMEXIT, PT_ACTION_VMEXIT},
+	{0, PT_ACTION_UNKNOWN_FLAG}
+};
+
 static const char *sample_flags_to_name(u32 flags)
 {
 	int i;
@@ -1630,6 +1658,17 @@ static const char *sample_flags_to_name(u32 flags)
 	}
 
 	return NULL;
+}
+
+static uint32_t sample_flags_to_new(u32 flags)
+{
+	int i;
+	for (i = 0; sample_flags_new[i].flags_new != PT_ACTION_UNKNOWN_FLAG; i++) {
+		if (sample_flags_new[i].flags == flags)
+			return sample_flags_new[i].flags_new;
+	}
+	fprintf(stderr, "Unknow Pt action flag: %u\n", flags);
+	return PT_ACTION_UNKNOWN_FLAG;
 }
 
 int perf_sample__sprintf_flags(u32 flags, char *str, size_t sz)
@@ -2134,6 +2173,44 @@ static bool show_event(struct perf_sample *sample,
 	}
 }
 
+static struct output_symbol_entry*
+perf_sample_get_output_symbol(struct addr_location *al,
+		const struct symbol *sym, u64 addr, FILE *fp) {
+	unsigned long offset;
+	struct output_symbol_entry* e;
+	if (sym) {
+		if (al->addr < sym->end)
+			offset = al->addr - sym->start;
+		else
+			offset = al->addr - al->map->start - sym->start;
+		e = output_symbols_lookup_and_add(addr, offset, sym->name, fp);
+	} else {
+		/* unknown symbol */
+		e = output_symbols_lookup_and_add(0, 0, "[unknown]", fp);
+	}
+	return e;
+}
+
+static void perf_sample__fprint_compact(
+		struct perf_sample *sample,
+		struct perf_event_attr *attr,
+		struct thread *thread,
+		struct addr_location *al, FILE *fp) {
+
+		struct addr_location addr_al;
+		struct output_symbol_entry* from, *to;
+		if (!sample_addr_correlates_sym(attr)) {
+			return;
+		}
+		thread__resolve(thread, &addr_al, sample);
+		from = perf_sample_get_output_symbol(al, al->sym, sample->ip, fp);
+		to = perf_sample_get_output_symbol(&addr_al,
+				addr_al.sym, sample->addr, fp);
+
+		pt_fwrite_branch_action(fp, sample->tid, sample->time,
+			sample_flags_to_new(sample->flags), from->sym_id, to->sym_id);
+}
+
 static void process_event(struct perf_script *script,
 			  struct perf_sample *sample, struct evsel *evsel,
 			  struct addr_location *al,
@@ -2152,6 +2229,11 @@ static void process_event(struct perf_script *script,
 		return;
 
 	++es->samples;
+
+	if (opt_compact_format) {
+		perf_sample__fprint_compact(sample, attr, thread, al, fp);
+		return;
+	}
 
 	perf_sample__fprintf_start(script, sample, thread, evsel,
 				   PERF_RECORD_SAMPLE, fp);
@@ -2720,6 +2802,15 @@ static int process_text_poke_events(struct perf_tool *tool,
 static void sig_handler(int sig __maybe_unused)
 {
 	session_done = 1;
+	if (parallel_child_pid != 0) {
+		for (int k=0; k<parallel_file_count; k++) {
+			// signal all child workers to stop
+			if (worker_pids[k] != 0)
+				kill(worker_pids[k], SIGINT);
+		}
+	} else {
+		exit(-1);
+	}
 }
 
 static void perf_script__fclose_per_event_dump(struct perf_script *script)
@@ -3985,6 +4076,18 @@ int cmd_script(int argc, const char **argv)
 		    "Guest code can be found in hypervisor process"),
 	OPT_BOOLEAN('\0', "stitch-lbr", &script.stitch_lbr,
 		    "Enable LBR callgraph stitching approach"),
+	OPT_STRING(0, "parallel-prefix", &parallel_prefix, "file_prefix",
+		   "File name prefix for parallel PT output"),
+	OPT_INTEGER(0, "parallel", &parallel_worker,
+		    "the number of parallel_worker"),
+	OPT_INTEGER(0, "parallel_by_events", &parallel_by_events,
+		    "dispatch script work by event number, otherwise will by auxtrace size, 0 by default"),
+	OPT_INTEGER(0, "compact_format", &opt_compact_format,
+		    "print intel-pt actions with compact binary format"),
+	OPT_STRING(0, "func_filter", &func_filter_str, "func_filter",
+		   "only decode specified functions, with comma as separator"),
+	OPT_STRING(0, "opt_dso_name", &opt_dso_name, "opt_dso_name",
+		   "dso name for decoding trace"),
 	OPTS_EVSWITCH(&script.evswitch),
 	OPT_END()
 	};

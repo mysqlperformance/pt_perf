@@ -1,0 +1,247 @@
+%%%%%%%%%%%%% test text case [do_command]
+/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f do_command -d 0.1 -s -t -o -c 1 --script_format=text --history=3
+[ start 10 parallel workers ]
+[ parsed 538460 actions, trace errors: 193 ]
+[ real trace time: 0.15 seconds ]
+[ miss trace time: 0.01 seconds ]
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Latency of [do_command]:[0m
+          ns             : cnt        distribution        sched      distribution        
+      4096 -> 8191       : 0        |                    | 1311     |**                  |
+      8192 -> 16383      : 0        |                    | 9417     |********************|
+     16384 -> 32767      : 1        |                    | 3015     |******              |
+     32768 -> 65535      : 5428     |******************* | 138      |                    |
+     65536 -> 131071     : 5669     |********************| 4        |                    |
+    131072 -> 262143     : 1504     |*****               | 0        |                    |
+    262144 -> 524287     : 1284     |****                | 0        |                    |
+trace count: 13886, average latency: 109327 ns
+sched count: 13885,   sched latency:  13187 ns, cpu percent: 917 %
+sched total: 13908, sched each time: 13166 ns
+
+[33m-------------------------------------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_command]:[0m
+                   name                : avg        cnt        call_line                            sched_time cpu_pct(%) distribution (total) 
+| dispatch_command                     : 87714      13886      sql_parse.cc:1466                    12         837.21    |********************|
+| Protocol_classic::get_command        : 21313      13886      sql_parse.cc:1404                    13174      77.69     |****                |
+| my_net_set_read_timeout              : 44         13886      sql_parse.cc:1353                    0          0.42      |                    |
+| my_net_set_read_timeout              : 41         13886      sql_parse.cc:1462                    0          0.39      |                    |
+| THD::get_protocol_classic            : 41         13886      sql_parse.cc:1352                    0          0.40      |                    |
+| THD::get_protocol_classic            : 30         13886      sql_parse.cc:1455                    0          0.29      |                    |
+| *code block: 195-200                 : 28         13886      sql_parse.cc:1388-sql_parse.cc:1389  0          0.27      |                    |
+| THD::get_protocol_classic            : 26         13886      sql_parse.cc:1467                    0          0.26      |                    |
+| THD::get_protocol                    : 25         13886      sql_parse.cc:1404                    0          0.24      |                    |
+| *code block: 433-454                 : 18         13886      sql_parse.cc:1405-sql_parse.cc:1455  0          0.18      |                    |
+| *code block: 414-430                 : 11         13886      sql_parse.cc:1404-sql_parse.cc:1404  0          0.11      |                    |
+| THD::get_protocol_classic            : 10         13886      sql_parse.cc:1459                    0          0.10      |                    |
+| Thd_mem_cnt::reset                   : 2          13886      sql_parse.cc:1388                    0          0.03      |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 2          13886      sql_parse.cc:1344                    0          0.02      |                    |
+| *code block: 0-78                    : 1          13886      sql_parse.cc:1322-sql_parse.cc:1344  0          0.01      |                    |
+| *code block: 459-462                 : 0          13886      sql_parse.cc:1459-sql_parse.cc:1459  0          0.00      |                    |
+| *code block: 183-190                 : 0          13886      sql_parse.cc:1388-sql_parse.cc:1388  0          0.00      |                    |
+| *code block: 392-409                 : 0          13886      sql_parse.cc:1403-sql_parse.cc:1404  0          0.00      |                    |
+| *code block: 475-512                 : 0          13886      sql_string.h:424-sql_parse.cc:1462   0          0.00      |                    |
+| *code block: 116-145                 : 0          13886      sql_parse.cc:1384-sql_parse.cc:1384  0          0.00      |                    |
+| *code block: 545-548                 : 0          13886      sql_parse.cc:1467-sql_parse.cc:1467  0          0.00      |                    |
+| Protocol_classic::get_output_packet  : 0          13886      sql_parse.cc:1467                    0          0.00      |                    |
+| *code block: 99-111                  : 0          13886      sql_parse.cc:1353-sql_parse.cc:1353  0          0.00      |                    |
+| *code block: 517-529                 : 0          13886      sql_parse.cc:1466-sql_parse.cc:1466  0          0.00      |                    |
+| *code block: 534-540                 : 0          13886      sql_parse.cc:1467-sql_parse.cc:1467  0          0.00      |                    |
+| Protocol_classic::get_net            : 0          13886      sql_parse.cc:1352                    0          0.00      |                    |
+| *code block: 553-579                 : 0          13886      sql_string.h:424-sql_string.h:425    0          0.00      |                    |
+| *code block: 467-470                 : 0          13886      sql_parse.cc:1459-sql_parse.cc:1459  0          0.00      |                    |
+| *code block: 91-94                   : 0          13886      sql_parse.cc:1352-sql_parse.cc:1352  0          0.00      |                    |
+| *code block: 83-86                   : 0          13886      sql_parse.cc:1352-sql_parse.cc:1352  0          0.00      |                    |
+| Protocol_classic::get_output_packet  : 0          13886      sql_parse.cc:1459                    0          0.00      |                    |
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Latency of [do_command]
+           called from [handle_connection(:1455)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+      8192 -> 16383      : 0        |                    | 1        |********************|
+     16384 -> 32767      : 0        |                    | 0        |                    |
+     32768 -> 65535      : 0        |                    | 0        |                    |
+     65536 -> 131071     : 0        |                    | 0        |                    |
+    131072 -> 262143     : 1        |********************| 0        |                    |
+trace count: 1, average latency: 143270 ns
+sched count: 1,   sched latency:  13044 ns, cpu percent: 0 %
+
+[33m-------------------------------------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_command]
+                             called from [handle_connection(:1455)]:[0m
+                   name                : avg        cnt        call_line                            sched_time cpu_pct(%) distribution (total) 
+| dispatch_command                     : 121338     1          sql_parse.cc:1466                    0          0.08      |********************|
+| Protocol_classic::get_command        : 21568      1          sql_parse.cc:1404                    13044      0.01      |***                 |
+| my_net_set_read_timeout              : 51         1          sql_parse.cc:1462                    0          0.00      |                    |
+| THD::get_protocol_classic            : 45         1          sql_parse.cc:1352                    0          0.00      |                    |
+| THD::get_protocol_classic            : 45         1          sql_parse.cc:1467                    0          0.00      |                    |
+| Thd_mem_cnt::reset                   : 45         1          sql_parse.cc:1388                    0          0.00      |                    |
+| my_net_set_read_timeout              : 38         1          sql_parse.cc:1353                    0          0.00      |                    |
+| *code block: 414-430                 : 32         1          sql_parse.cc:1404-sql_parse.cc:1404  0          0.00      |                    |
+| THD::get_protocol_classic            : 25         1          sql_parse.cc:1455                    0          0.00      |                    |
+| *code block: 433-454                 : 20         1          sql_parse.cc:1405-sql_parse.cc:1455  0          0.00      |                    |
+| *code block: 0-78                    : 19         1          sql_parse.cc:1322-sql_parse.cc:1344  0          0.00      |                    |
+| THD::get_protocol                    : 19         1          sql_parse.cc:1404                    0          0.00      |                    |
+| THD::get_protocol_classic            : 13         1          sql_parse.cc:1459                    0          0.00      |                    |
+| *code block: 91-94                   : 0          1          sql_parse.cc:1352-sql_parse.cc:1352  0          0.00      |                    |
+| *code block: 545-548                 : 0          1          sql_parse.cc:1467-sql_parse.cc:1467  0          0.00      |                    |
+| *code block: 116-145                 : 0          1          sql_parse.cc:1384-sql_parse.cc:1384  0          0.00      |                    |
+| *code block: 553-579                 : 0          1          sql_string.h:424-sql_string.h:425    0          0.00      |                    |
+| *code block: 467-470                 : 0          1          sql_parse.cc:1459-sql_parse.cc:1459  0          0.00      |                    |
+| *code block: 475-512                 : 0          1          sql_string.h:424-sql_parse.cc:1462   0          0.00      |                    |
+| Protocol_classic::get_output_packet  : 0          1          sql_parse.cc:1467                    0          0.00      |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 0          1          sql_parse.cc:1344                    0          0.00      |                    |
+| *code block: 83-86                   : 0          1          sql_parse.cc:1352-sql_parse.cc:1352  0          0.00      |                    |
+| *code block: 183-190                 : 0          1          sql_parse.cc:1388-sql_parse.cc:1388  0          0.00      |                    |
+| *code block: 534-540                 : 0          1          sql_parse.cc:1467-sql_parse.cc:1467  0          0.00      |                    |
+| Protocol_classic::get_net            : 0          1          sql_parse.cc:1352                    0          0.00      |                    |
+| *code block: 459-462                 : 0          1          sql_parse.cc:1459-sql_parse.cc:1459  0          0.00      |                    |
+| *code block: 99-111                  : 0          1          sql_parse.cc:1353-sql_parse.cc:1353  0          0.00      |                    |
+| *code block: 392-409                 : 0          1          sql_parse.cc:1403-sql_parse.cc:1404  0          0.00      |                    |
+| Protocol_classic::get_output_packet  : 0          1          sql_parse.cc:1459                    0          0.00      |                    |
+| *code block: 517-529                 : 0          1          sql_parse.cc:1466-sql_parse.cc:1466  0          0.00      |                    |
+| *code block: 195-200                 : 0          1          sql_parse.cc:1388-sql_parse.cc:1389  0          0.00      |                    |
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Latency of [do_command]
+           called from [handle_connection(connection_handler_per_thread.cc:304)]:[0m
+          ns             : cnt        distribution        sched      distribution        
+      4096 -> 8191       : 0        |                    | 1311     |**                  |
+      8192 -> 16383      : 0        |                    | 9416     |********************|
+     16384 -> 32767      : 1        |                    | 3015     |******              |
+     32768 -> 65535      : 5428     |******************* | 138      |                    |
+     65536 -> 131071     : 5669     |********************| 4        |                    |
+    131072 -> 262143     : 1503     |*****               | 0        |                    |
+    262144 -> 524287     : 1284     |****                | 0        |                    |
+trace count: 13885, average latency: 109325 ns
+sched count: 13884,   sched latency:  13187 ns, cpu percent: 917 %
+
+[33m-------------------------------------------------------------------------------------------------------------------------------------------------------[0m
+[32mHistogram - Child functions's Latency of [do_command]
+                             called from [handle_connection(connection_handler_per_thread.cc:304)]:[0m
+                   name                : avg        cnt        call_line                            sched_time cpu_pct(%) distribution (total) 
+| dispatch_command                     : 87711      13885      sql_parse.cc:1466                    12         837.12    |********************|
+| Protocol_classic::get_command        : 21313      13885      sql_parse.cc:1404                    13174      77.69     |****                |
+| my_net_set_read_timeout              : 44         13885      sql_parse.cc:1353                    0          0.42      |                    |
+| my_net_set_read_timeout              : 41         13885      sql_parse.cc:1462                    0          0.39      |                    |
+| THD::get_protocol_classic            : 41         13885      sql_parse.cc:1352                    0          0.40      |                    |
+| THD::get_protocol_classic            : 30         13885      sql_parse.cc:1455                    0          0.29      |                    |
+| *code block: 195-200                 : 28         13885      sql_parse.cc:1388-sql_parse.cc:1389  0          0.27      |                    |
+| THD::get_protocol_classic            : 26         13885      sql_parse.cc:1467                    0          0.26      |                    |
+| THD::get_protocol                    : 25         13885      sql_parse.cc:1404                    0          0.24      |                    |
+| *code block: 433-454                 : 18         13885      sql_parse.cc:1405-sql_parse.cc:1455  0          0.18      |                    |
+| *code block: 414-430                 : 11         13885      sql_parse.cc:1404-sql_parse.cc:1404  0          0.11      |                    |
+| THD::get_protocol_classic            : 10         13885      sql_parse.cc:1459                    0          0.10      |                    |
+| Thd_mem_cnt::reset                   : 2          13885      sql_parse.cc:1388                    0          0.03      |                    |
+| Diagnostics_area::reset_diagnostics_
+    area                               : 2          13885      sql_parse.cc:1344                    0          0.02      |                    |
+| *code block: 0-78                    : 1          13885      sql_parse.cc:1322-sql_parse.cc:1344  0          0.01      |                    |
+| *code block: 459-462                 : 0          13885      sql_parse.cc:1459-sql_parse.cc:1459  0          0.00      |                    |
+| *code block: 183-190                 : 0          13885      sql_parse.cc:1388-sql_parse.cc:1388  0          0.00      |                    |
+| *code block: 392-409                 : 0          13885      sql_parse.cc:1403-sql_parse.cc:1404  0          0.00      |                    |
+| *code block: 475-512                 : 0          13885      sql_string.h:424-sql_parse.cc:1462   0          0.00      |                    |
+| *code block: 116-145                 : 0          13885      sql_parse.cc:1384-sql_parse.cc:1384  0          0.00      |                    |
+| *code block: 545-548                 : 0          13885      sql_parse.cc:1467-sql_parse.cc:1467  0          0.00      |                    |
+| Protocol_classic::get_output_packet  : 0          13885      sql_parse.cc:1467                    0          0.00      |                    |
+| *code block: 99-111                  : 0          13885      sql_parse.cc:1353-sql_parse.cc:1353  0          0.00      |                    |
+| *code block: 517-529                 : 0          13885      sql_parse.cc:1466-sql_parse.cc:1466  0          0.00      |                    |
+| *code block: 534-540                 : 0          13885      sql_parse.cc:1467-sql_parse.cc:1467  0          0.00      |                    |
+| Protocol_classic::get_net            : 0          13885      sql_parse.cc:1352                    0          0.00      |                    |
+| *code block: 553-579                 : 0          13885      sql_string.h:424-sql_string.h:425    0          0.00      |                    |
+| *code block: 467-470                 : 0          13885      sql_parse.cc:1459-sql_parse.cc:1459  0          0.00      |                    |
+| *code block: 91-94                   : 0          13885      sql_parse.cc:1352-sql_parse.cc:1352  0          0.00      |                    |
+| *code block: 83-86                   : 0          13885      sql_parse.cc:1352-sql_parse.cc:1352  0          0.00      |                    |
+| Protocol_classic::get_output_packet  : 0          13885      sql_parse.cc:1459                    0          0.00      |                    |
+
+[33m=======================================================================================================================================================[0m
+%%%%%%%%%%%%% test text case [btr_cur_optimistic_update]
+/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_optimistic_update -d 0.1 -s -t -o -c 1 --script_format=text --history=3
+[ start 10 parallel workers ]
+[ parsed 115707 actions, trace errors: 178 ]
+[ real trace time: 0.21 seconds ]
+[ miss trace time: 0.01 seconds ]
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [row_upd_clust_rec(row0upd.cc:2837)]:[0m
+                   name                : avg        cnt        call_line                        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 145        1495       btr0cur.cc:3545                  0          0.11      |********************|
+| rec_get_offsets                      : 121        1495       btr0cur.cc:3535                  0          0.09      |****************    |
+| *code block: 147-149                 : 1          1495       btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 0-121                   : 0          1495       btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
+| *code block: 264-316                 : 0          1495       btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
+| *code block: 126-142                 : 0          1495       btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| btr_cur_update_in_place              : unknown    1495       btr0cur.cc:3551  incomplete call/return, trace it directly
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [row_ins_clust_index_entry_low(row0ins.cc:358)]:[0m
+                   name                : avg        cnt        call_line                        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 199        730        btr0cur.cc:3545                  0          0.07      |********************|
+| rec_get_offsets                      : 96         730        btr0cur.cc:3535                  0          0.03      |*********           |
+| *code block: 147-149                 : 0          730        btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 126-142                 : 0          730        btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 264-316                 : 0          730        btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
+| *code block: 0-121                   : 0          730        btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
+| btr_cur_update_in_place              : unknown    730        btr0cur.cc:3551  incomplete call/return, trace it directly
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [btr_cur_optimistic_update]
+                             called from [unknown(-)]:[0m
+                   name                : avg        cnt        call_line                        sched_time cpu_pct(%) distribution (total) 
+| row_upd_changes_field_size_or_extern
+    al                                 : 221        20         btr0cur.cc:3545                  0          0.00      |********************|
+| rec_get_offsets                      : 75         20         btr0cur.cc:3535                  0          0.00      |******              |
+| *code block: 0-121                   : 0          20         btr0cur.cc:3496-btr0cur.cc:3535  0          0.00      |                    |
+| *code block: 264-316                 : 0          20         btr0cur.cc:3551-btr0cur.cc:3551  0          0.00      |                    |
+| *code block: 126-142                 : 0          20         btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+| *code block: 147-149                 : 0          20         btr0cur.cc:3545-btr0cur.cc:3545  0          0.00      |                    |
+
+[33m=======================================================================================================================================================[0m
+%%%%%%%%%%%%% test text case [log_writer]
+/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f log_writer -d 0.1 -s -t -o -c 1 --script_format=text --history=3
+[ start 10 parallel workers ]
+[ parsed 7465501 actions, trace errors: 177 ]
+[ real trace time: 0.22 seconds ]
+[ miss trace time: 0.00 seconds ]
+
+[33m=======================================================================================================================================================[0m
+[32mHistogram - Child functions's Latency of [log_writer]
+                             called from [unknown(-)]:[0m
+                   name                : avg        cnt        call_line                            sched_time cpu_pct(%) distribution (total) 
+| log_writer_write_buffer              : 2372       26087      log0write.cc:2298                    135        26.05     |************        |
+| os_event_set                         : 2240       26         ut0mutex.ic:224                      0          0.03      |                    |
+| std::chrono::_V2::system_clock::now@
+    plt                                : 681        26         log0write.cc:1249                    0          0.01      |                    |
+| sync_array_object_signalled          : 122        26         ut0mutex.ic:226                      0          0.00      |                    |
+| mutex_enter_inline<PolicyMutex<TTASE
+    ventMutex<GenericPolicy> > >       : 90         26         log0write.cc:2307                    0          0.00      |                    |
+| *code block: 428-506                 : 61         26087      atomic_base.h:426-log0write.cc:2297  0          0.71      |                    |
+| *code block: 1431-1458               : 55         26         atomic:247-ib0mutex.h:430            0          0.00      |                    |
+| log_advance_ready_for_write_lsn      : 41         2393422    log0write.cc:2255                    0          44.47     |********************|
+| *code block: 379-423                 : 33         3          atomic_base.h:426-log0write.cc:2255  0          0.00      |                    |
+| *code block: 368-423                 : 21         2367197    atomic_base.h:426-log0write.cc:2255  0          22.74     |**********          |
+| *code block: 435-506                 : 12         1          atomic_base.h:426-log0write.cc:2297  0          0.00      |                    |
+| *code block: 411-423                 : 6          1          os0event.ic:77-log0write.cc:2255     0          0.00      |                    |
+| *code block: 442-445                 : 6          1          log0write.cc:2263-log0write.cc:2263  0          0.00      |                    |
+| *code block: 393-423                 : 6          3          log0write.cc:2272-log0write.cc:2255  0          0.00      |                    |
+| *code block: 428-445                 : 3          2367333    atomic_base.h:426-log0write.cc:2263  0          3.91      |*                   |
+| *code block: 272-334                 : 1          26087      atomic:258-chrono:682                0          0.02      |                    |
+| *code block: 408-423                 : 1          26211      os0event.ic:77-log0write.cc:2255     0          0.01      |                    |
+| *code block: 1290-1420               : 1          26         chrono:789-ib0mutex.h:770            0          0.00      |                    |
+| *code block: 1256-1285               : 0          26         log0write.cc:2300-log0write.cc:1249  0          0.00      |                    |
+| *code block: 355-365                 : 0          26087      os0event.ic:65-os0event.ic:67        0          0.00      |                    |
+| *code block: 640-648                 : 0          26061      log0write.cc:2244-log0write.cc:2314  0          0.00      |                    |
+| *code block: 1949-1965               : 0          26         atomic_base.h:404-ut0mutex.ic:224    0          0.00      |                    |
+| *code block: 1488-648                : 0          26         log0write.cc:2307-log0write.cc:2314  0          0.00      |                    |
+| *code block: 1248-1251               : 0          26088      log0write.cc:2298-log0write.cc:2298  0          0.00      |                    |
+| *code block: 1975-1483               : 0          26         ut0mutex.ic:227-log0write.cc:2307    0          0.00      |                    |
+| *code block: 1656-1670               : 0          26087      srv0mon.h:745-log0write.cc:1201      0          0.00      |                    |
+| *code block: 1256-1267               : 0          26061      log0write.cc:2300-log0write.cc:2300  0          0.00      |                    |
+| *code block: 420-423                 : 0          7          log0write.cc:2255-log0write.cc:2255  0          0.00      |                    |
+
+[33m=======================================================================================================================================================[0m

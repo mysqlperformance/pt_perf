@@ -8,10 +8,15 @@
 #include "machine.h"
 #include "data.h"
 #include "ordered-events.h"
+#include <unistd.h>
+#include <stdlib.h>
 #include "util/compress.h"
 #include <linux/kernel.h>
 #include <linux/rbtree.h>
 #include <linux/perf_event.h>
+
+extern int parallel_child_pid;
+extern FILE *parallel_redirect_stdout;
 
 struct ip_callchain;
 struct symbol;

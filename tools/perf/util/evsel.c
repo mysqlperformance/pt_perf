@@ -1765,6 +1765,37 @@ static bool evsel__ignore_missing_thread(struct evsel *evsel,
 	return true;
 }
 
+/* this function ignores one thread after all thread event have been opened */
+bool evsel__ignore_missing_thread2(struct evlist *evlist,
+            struct perf_thread_map *threads, int thread) {
+	pid_t ignore_pid = perf_thread_map__pid(threads, thread);
+	struct evsel *evsel;
+
+	/* If there's only one thread, let it fail. */
+	if (threads->nr == 1)
+		return false;
+
+	// remove thread from all opened evsel
+	evlist__for_each_entry(evlist, evsel) {
+		if (!evsel->ignore_missing_thread)
+			continue;
+
+		/* The system wide setup does not work with threads. */
+		if (evsel->core.system_wide)
+			continue;
+
+		evsel__remove_fd(evsel, perf_cpu_map__nr(evsel->core.cpus), threads->nr, thread);
+	}
+
+	if (thread_map__remove(threads, thread))
+		return false;
+
+	pr_warning("WARNING: Ignored missing thread %d\n",
+		   ignore_pid);
+
+  return true;
+}
+
 static int __open_attr__fprintf(FILE *fp, const char *name, const char *val,
 				void *priv __maybe_unused)
 {

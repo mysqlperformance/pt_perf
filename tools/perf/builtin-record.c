@@ -2499,6 +2499,7 @@ static int __cmd_record(struct record *rec, int argc, const char **argv)
 	if (err)
 		goto out_free_threads;
 
+	global_evlist = rec->evlist;
 	err = record__synthesize(rec, false);
 	if (err < 0)
 		goto out_free_threads;

@@ -41,7 +41,8 @@
 #include "auxtrace.h"
 
 #include <linux/hash.h>
-
+#include <unistd.h>
+#include <sys/wait.h>
 #include "event.h"
 #include "record.h"
 #include "session.h"
@@ -60,6 +61,117 @@
 #include "symbol/kallsyms.h"
 #include <internal/lib.h>
 #include "util/sample.h"
+#include "util/thread.h"
+#include "include/perf/pt_compact_format.h"
+
+int parallel_worker = 1; // worker number to do perf script
+int parallel_by_events = 0;
+const char *parallel_prefix = "script_out_";
+int parallel_file_count = 0;
+static size_t total_event = 0;
+
+// divide work by events number
+static size_t parallel_step = 1; 
+static size_t total_event_added = 0;
+size_t parallel_event_added = 0;
+size_t parallel_batch = 0; // the event batch size of one child process
+u64 parallel_file_offset_start = 0;
+
+// for dividing work by auxtrace size
+static size_t total_auxtrace_size = 0;
+static size_t parallel_auxtrace_size = 0;
+static size_t auxtrace_size_added = 0;
+
+// script filter
+#define MAX_FILTER_SYMBOL 1024
+const char *func_filter_str = "";
+const char *opt_dso_name = "";
+
+const char *func_filter[MAX_FILTER_SYMBOL];
+size_t func_filter_num = 0;
+struct symbol fil_syms[MAX_FILTER_SYMBOL];
+size_t fil_syms_size = 0;
+
+int *worker_pids = NULL;
+
+#define MAX_CPUS 2048
+struct parallel_cache_entry cpu_batch_events[MAX_CPUS];
+
+struct auxtrace_cache *thread_batch_events = NULL;
+size_t cpu_thread_size = 0; // cpu or thread size in current parallel batch
+size_t cpu_thread_last_psb_add = 0; // the number last psb add in parallel batch
+
+static struct dso *load_dso(const char *name);
+static void func_filter_generate_fil_sym(void) {
+  if (func_filter_num && strlen(opt_dso_name) > 0) {
+    // find all symbols with 'func_filter' name
+    struct dso *dso = load_dso(opt_dso_name);
+    struct symbol *sym = dso__first_symbol(dso);
+    while (sym) {
+      for (size_t i = 0; i < func_filter_num; ++i) {
+        const char *func_name = func_filter[i];
+        if (!arch__compare_symbol_names(func_name, sym->name) && fil_syms_size < MAX_FILTER_SYMBOL){
+          fil_syms[fil_syms_size].start = sym->start;
+          fil_syms[fil_syms_size].end = sym->end;
+          fil_syms_size++;
+        }
+      }
+      sym = dso__next_symbol(sym);
+    }
+  }
+}
+
+static void func_filter_init(void) {
+	char *p;
+	if (!strlen(func_filter_str))
+		return;
+	p = (char *) func_filter_str;
+	func_filter[func_filter_num++] = p;
+	while (*p != '\0') {
+		if (*p == ',' && *(p+1) != '\0') {
+			*p = '\0';
+			func_filter[func_filter_num++] = p + 1;
+		}
+		p++;
+	}
+
+	func_filter_generate_fil_sym();
+}
+
+bool func_filter_match(const char *name) {
+	for (size_t i = 0; i < func_filter_num; ++i) {
+		const char *func_name = func_filter[i];
+		if (!strcmp(name, func_name))
+			return true;
+	}
+	return false;
+}
+
+/* For compact output */
+int opt_compact_format = 0;
+struct auxtrace_cache *output_symbols = NULL;
+size_t global_sym_id = 0;
+static void output_symbol_cache_init(void) {
+	if (opt_compact_format) {
+		output_symbols = auxtrace_cache__new(12,
+			sizeof(struct output_symbol_entry), 10000);
+	}
+}
+
+struct output_symbol_entry* output_symbols_lookup_and_add(
+    uint64_t addr, uint32_t offs, const char *name, FILE *fp) {
+	struct output_symbol_entry *e =
+	  auxtrace_cache__lookup(output_symbols, addr);
+	if (!e) {
+		e = auxtrace_cache__alloc_entry(output_symbols);
+		e->sym_id = global_sym_id++;
+		e->addr = addr;
+		e->offs = offs;
+		auxtrace_cache__add(output_symbols, addr, &e->entry);
+		pt_fwrite_symbol_action(fp, e->sym_id, e->addr, e->offs, name);
+	}
+	return e;
+}
 
 /*
  * Make a group from 'leader' to 'last', requiring that the events were not
@@ -406,6 +518,7 @@ int auxtrace_queues__add_event(struct auxtrace_queues *queues,
 			       union perf_event *event, off_t data_offset,
 			       struct auxtrace_buffer **buffer_ptr)
 {
+	char parallel_file_name[100] = "\0";
 	struct auxtrace_buffer buffer = {
 		.pid = -1,
 		.tid = event->auxtrace.tid,
@@ -417,8 +530,102 @@ int auxtrace_queues__add_event(struct auxtrace_queues *queues,
 	};
 	unsigned int idx = event->auxtrace.idx;
 
+	if (parallel_worker > 1) {
+		bool in_batch;
+		if (parallel_by_events) {
+			// divided by event number
+			in_batch = total_event_added < (parallel_file_count * parallel_step);
+		} else {
+			// divided by auxtrace_size
+			in_batch = auxtrace_size_added < (parallel_file_count * parallel_auxtrace_size);
+		}
+		if (parallel_child_pid != 0 && !in_batch &&
+		    total_event_added < total_event) {
+			// start new child process to deal the new batch
+			parallel_child_pid = fork();
+			if (parallel_child_pid == 0) {
+				parallel_file_offset_start = data_offset;
+				/* redirect child script stdio to file */
+				sprintf(parallel_file_name, "%s_%05d",
+					parallel_prefix, parallel_file_count);
+				if (opt_compact_format) {
+				  parallel_redirect_stdout = freopen(
+				  	parallel_file_name, "wb", stdout);
+				} else {
+				  parallel_redirect_stdout = freopen(
+				  	parallel_file_name, "w", stdout);
+				}
+			} else {
+				worker_pids[parallel_file_count] = parallel_child_pid;
+			}
+			parallel_file_count++;
+			in_batch = true; // now in new batch
+		}
+		if (total_event_added == total_event)
+			// last_event is achieved, can't add event
+			return 0;
+
+		total_event_added++;
+		auxtrace_size_added += event->auxtrace.size;
+		if (parallel_child_pid != 0) {
+			// parent does nothing
+			return 0;
+		}
+
+		if (in_batch) {
+			parallel_batch++;
+			if (event->auxtrace.cpu != UINT_MAX) {
+				// per-cpu mode, store the batch events of each cpu
+				struct parallel_cache_entry *e = &cpu_batch_events[event->auxtrace.cpu];
+				if (e->batch_add == 0)
+					cpu_thread_size++;
+				e->batch_add++;
+			} else {
+				// per-thread mode, store the batch events of each thread
+				struct parallel_cache_entry *e =
+					auxtrace_cache__lookup(thread_batch_events, event->auxtrace.tid);
+				if (!e) {
+					cpu_thread_size++;
+					e = auxtrace_cache__alloc_entry(thread_batch_events);
+					e->batch_add = 0;
+					e->buffer_add = 0;
+					e->last_psb_add = 0;
+					e->buffer_lookahead = 0;
+					e->last_psb_lookahead = 0;
+					auxtrace_cache__add(thread_batch_events, event->auxtrace.tid, &e->entry);
+				}
+				e->batch_add++;
+			}
+		}
+		parallel_event_added++;
+	}
 	return auxtrace_queues__add_buffer(queues, session, idx, &buffer,
 					   buffer_ptr);
+}
+
+static int auxtrace_queues__get_auxtrace_size(struct perf_session *session,
+					off_t file_offset, size_t sz)
+{
+	union perf_event *event;
+	char buf[PERF_SAMPLE_MAX_SIZE];
+
+	int err = perf_session__peek_event(session, file_offset, buf,
+				       PERF_SAMPLE_MAX_SIZE, &event, NULL);
+	if (err) 
+		return 0;
+
+	if (event->header.type == PERF_RECORD_AUXTRACE) {
+		if (event->header.size < sizeof(struct perf_record_auxtrace) ||
+		    event->header.size != sz) {
+			return 0;
+		}
+    // per-thread mode, we do thread filter here
+    if (event->auxtrace.cpu == UINT_MAX &&
+				thread__is_filter_by_tid(event->auxtrace.tid))
+      return 0;
+		return event->auxtrace.size;
+	}
+	return 0;
 }
 
 static int auxtrace_queues__add_indexed_event(struct auxtrace_queues *queues,
@@ -440,6 +647,10 @@ static int auxtrace_queues__add_indexed_event(struct auxtrace_queues *queues,
 			err = -EINVAL;
 			goto out;
 		}
+    // per-thread mode, we do thread filter here
+    if (event->auxtrace.cpu == UINT_MAX &&
+				thread__is_filter_by_tid(event->auxtrace.tid))
+      goto out;
 		file_offset += event->header.size;
 		err = auxtrace_queues__add_event(queues, session, event,
 						 file_offset, NULL);
@@ -1005,6 +1216,35 @@ int auxtrace_queues__process_index(struct auxtrace_queues *queues,
 	if (auxtrace__dont_decode(session))
 		return 0;
 
+	if (parallel_worker > 1) {
+		// get total index events and auxtrace size to dispatch
+		list_for_each_entry(auxtrace_index, &session->auxtrace_index,
+				    list) {
+			for (i = 0; i < auxtrace_index->nr; i++) {
+				ent = &auxtrace_index->entries[i];
+				total_event++;
+				total_auxtrace_size += auxtrace_queues__get_auxtrace_size(session, ent->file_offset, ent->sz);
+			}
+		}
+		parallel_step = total_event / parallel_worker + 1;
+		parallel_auxtrace_size = total_auxtrace_size / parallel_worker + 1;
+		fprintf(stderr,
+			"Parallel: workers: %d, total_events: %lu, events_step: %lu, auxtrace_size_step: %lu\n",
+			parallel_worker, total_event, parallel_step, parallel_auxtrace_size);
+		fflush(stderr);
+		fflush(stdout);
+		worker_pids = (int *)malloc(sizeof(int) * parallel_worker);
+		memset(worker_pids, 0, sizeof(int) * parallel_worker);
+		memset(cpu_batch_events, 0, sizeof(struct parallel_cache_entry) * MAX_CPUS);
+		thread_batch_events = auxtrace_cache__new(12, sizeof(struct parallel_cache_entry), 10000);
+	}
+
+	/* init func_filter */
+	func_filter_init();
+
+	/* init output symbol cache */
+	output_symbol_cache_init();
+
 	list_for_each_entry(auxtrace_index, &session->auxtrace_index, list) {
 		for (i = 0; i < auxtrace_index->nr; i++) {
 			ent = &auxtrace_index->entries[i];
@@ -1015,6 +1255,32 @@ int auxtrace_queues__process_index(struct auxtrace_queues *queues,
 				return err;
 		}
 	}
+
+	if (parallel_worker > 1) {
+		if (parallel_child_pid == 0) {
+			fprintf(stderr,
+				"Parallel worker %d: event batch size: %lu, total added events %lu, total scan events: %lu\n",
+				parallel_file_count, parallel_batch,
+				parallel_event_added, total_event_added);
+			fflush(stderr);
+			fflush(stdout);
+		} else {
+			// wait for all workers done
+			for (int k=0; k<parallel_worker; k++) {
+				if (worker_pids[k] != 0) {
+					waitpid(worker_pids[k], NULL, 0);
+				}
+			}
+			free(worker_pids);
+			auxtrace_cache__free(thread_batch_events);
+			if (output_symbols) {
+				auxtrace_cache__free(output_symbols);
+			}
+			worker_pids = NULL;
+			exit(0);
+		}
+	}
+
 	return 0;
 }
 
@@ -1687,6 +1953,10 @@ size_t perf_event__fprintf_auxtrace_error(union perf_event *event, FILE *fp)
 	unsigned long long nsecs = e->time;
 	const char *msg = e->msg;
 	int ret;
+
+	if (opt_compact_format) {
+		return pt_fwrite_error_action(fp, e->tid, e->time, e->code);
+	}
 
 	ret = fprintf(fp, " %s error type %u",
 		      auxtrace_error_name(e->type), e->type);
@@ -2603,15 +2873,40 @@ static void print_duplicate_syms(struct dso *dso, const char *sym_name)
 	pr_err("Or select a global symbol by inserting #0 or #g or #G\n");
 }
 
+static void print_all_syms(struct dso *dso, const char *sym_name) {
+	struct symbol *sym;
+	bool near = false;
+	int cnt = 0;
+
+	pr_err("Symbol list with name '%s'\n", sym_name);
+
+	sym = dso__first_symbol(dso);
+	while (sym) {
+		if (dso_sym_match(sym, sym_name, &cnt, -1)) {
+			pr_err("#%d\t0x%"PRIx64"\t%c\t%s\n",
+			       ++cnt, sym->start,
+			       sym->binding == STB_GLOBAL ? 'g' :
+			       sym->binding == STB_LOCAL  ? 'l' : 'w',
+			       sym->name);
+			near = true;
+		} else if (near) {
+			near = false;
+		}
+		sym = dso__next_symbol(sym);
+	}
+}
+
 static int find_dso_sym(struct dso *dso, const char *sym_name, u64 *start,
 			u64 *size, int idx)
 {
 	struct symbol *sym;
+	struct symbol *sym_use = NULL;
 	int cnt = 0;
 
 	*start = 0;
 	*size = 0;
 
+	print_all_syms(dso, sym_name);
 	sym = dso__first_symbol(dso);
 	while (sym) {
 		if (*start) {
@@ -2619,14 +2914,17 @@ static int find_dso_sym(struct dso *dso, const char *sym_name, u64 *start,
 				*size = sym->start - *start;
 			if (idx > 0) {
 				if (*size)
-					return 0;
+					goto found;
 			} else if (dso_sym_match(sym, sym_name, &cnt, idx)) {
+				if (idx == 0)
+					goto found;
 				print_duplicate_syms(dso, sym_name);
 				return -EINVAL;
 			}
 		} else if (dso_sym_match(sym, sym_name, &cnt, idx)) {
 			*start = sym->start;
 			*size = sym->end - sym->start;
+			sym_use = sym;
 		}
 		sym = dso__next_symbol(sym);
 	}
@@ -2634,6 +2932,12 @@ static int find_dso_sym(struct dso *dso, const char *sym_name, u64 *start,
 	if (!*start)
 		return sym_not_found_error(sym_name, idx);
 
+found:
+	if (sym_use)
+		pr_err("Use %c symbol, address 0x%lx\n", 
+		        sym_use->binding == STB_GLOBAL ? 'g' :
+		        sym_use->binding == STB_LOCAL  ? 'l' : 'w',
+		        sym_use->start);
 	return 0;
 }
 

@@ -1147,7 +1147,6 @@ else
 	@echo "FEATURE-DUMP file available in $(OUTPUT)FEATURE-DUMP"
 endif
 
-
 FORCE:
 
 .PHONY: all install clean config-clean strip install-gtk

@@ -8,9 +8,13 @@
 #include <api/fs/fs.h>
 
 #include <byteswap.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <perf/cpumap.h>
 
 #include "map_symbol.h"
@@ -37,6 +41,9 @@
 #include "arch/common.h"
 #include "units.h"
 #include <internal/lib.h>
+
+int parallel_child_pid = -1;
+FILE *parallel_redirect_stdout = NULL;
 
 #ifdef HAVE_ZSTD_SUPPORT
 static int perf_session__process_compressed_event(struct perf_session *session,
@@ -1867,6 +1874,16 @@ static s64 perf_session__process_event(struct perf_session *session,
 
 	if (tool->ordered_events) {
 		u64 timestamp = -1ULL;
+		if (parallel_worker > 1 && parallel_child_pid == 0 &&
+		 (file_offset < parallel_file_offset_start || 
+		 cpu_thread_last_psb_add >= cpu_thread_size) && 
+		 event->header.type == PERF_RECORD_AUX) {
+			/* for child process, no need add PERF_RECORD_AUX event 
+			* to order queue when the event is smaller than start pos
+			* or the last psbs are added for all cpus or threads.
+			* */
+			return 0;
+		}
 
 		ret = evlist__parse_sample_timestamp(evlist, event, &timestamp);
 		if (ret && ret != -1)
@@ -2137,6 +2154,15 @@ out_err:
 		perf_session__warn_about_errors(session);
 	ordered_events__free(&session->ordered_events);
 	auxtrace__free_events(session);
+
+	if (parallel_redirect_stdout)
+		fclose(parallel_redirect_stdout);
+
+	if (thread_batch_events)
+		auxtrace_cache__free(thread_batch_events);
+
+	if (output_symbols)
+		auxtrace_cache__free(output_symbols);
 	return err;
 }
 
@@ -2403,7 +2429,6 @@ reader__process_events(struct reader *rd, struct perf_session *session,
 		       struct ui_progress *prog)
 {
 	int err;
-
 	err = reader__init(rd, &session->one_mmap);
 	if (err)
 		goto out;

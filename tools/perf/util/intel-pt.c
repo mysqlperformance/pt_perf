@@ -53,6 +53,14 @@
 #define INTEL_PT_CFG_EVT_EN	BIT_ULL(31)
 #define INTEL_PT_CFG_TNT_DIS	BIT_ULL(55)
 
+extern struct symbol fil_syms[];
+extern size_t func_filter_num;
+extern size_t fil_syms_size;
+static size_t current_decode_cpu = (size_t)-2;
+static size_t current_decode_tid = (size_t)-2;
+
+#define MAX_CPUS 2048
+
 struct range {
 	u64 start;
 	u64 end;
@@ -468,7 +476,38 @@ static int intel_pt_lookahead(void *data, intel_pt_lookahead_cb_t cb,
 		err = intel_pt_get_buffer(ptq, buffer, old_buffer, &b);
 		if (err)
 			break;
-
+		if (parallel_worker > 1) {
+			struct parallel_cache_entry *e = NULL;
+			unsigned char *first_psb = NULL;
+			if (current_decode_cpu < MAX_CPUS) {
+				// per-cpu mode
+				e = &cpu_batch_events[current_decode_cpu];
+			} else {
+				// per-thread mode
+				e = auxtrace_cache__lookup(thread_batch_events, current_decode_tid);
+			}
+			if (!e || !e->batch_add) {
+				// not lookahead
+				b.len = 0;
+			} else {
+				if (e->buffer_lookahead < e->batch_add) {
+				} else if (e->last_psb_lookahead == 0) {
+					first_psb = memmem(b.buf, b.len, INTEL_PT_PSB_STR,
+							   INTEL_PT_PSB_LEN);
+					if (first_psb != NULL) {
+						// parse last psb in the first psb of no-batch event
+						b.len = first_psb - b.buf;
+						e->last_psb_lookahead++;
+					} else {
+						// add event with buffer smaller than psb size
+					}
+				} else {
+					// no lookahead
+					b.len = 0;
+				}
+				e->buffer_lookahead++;
+			}
+		}
 		if (b.len) {
 			intel_pt_lookahead_drop_buffer(ptq, old_buffer);
 			old_buffer = buffer;
@@ -500,6 +539,7 @@ static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 	struct auxtrace_buffer *old_buffer = ptq->old_buffer;
 	struct auxtrace_queue *queue;
 	int err;
+	unsigned char *first_psb = NULL;
 
 	if (ptq->stop) {
 		b->len = 0;
@@ -521,6 +561,44 @@ static int intel_pt_get_trace(struct intel_pt_buffer *b, void *data)
 	err = intel_pt_get_buffer(ptq, buffer, old_buffer, b);
 	if (err)
 		return err;
+
+	if (parallel_worker > 1) {
+		struct parallel_cache_entry *e = NULL;
+		if (current_decode_cpu < MAX_CPUS) {
+			// per-cpu mode
+			e = &cpu_batch_events[current_decode_cpu];
+		} else {
+			// per-thread mode
+			e = auxtrace_cache__lookup(thread_batch_events, current_decode_tid);
+		}
+		if (!e || !e->batch_add) {
+			b->len = 0;
+		} else {
+			if (e->buffer_add < e->batch_add) {
+			} else if (e->last_psb_add == 0) {
+				first_psb = memmem(b->buf, b->len, INTEL_PT_PSB_STR,
+						   INTEL_PT_PSB_LEN);
+				if (first_psb != NULL) {
+					// parse last psb in the first psb of no-batch event
+					b->len = first_psb - b->buf;
+					e->last_psb_add++;
+					e->last_psb_lookahead++;
+					cpu_thread_last_psb_add++;
+				} else {
+					// add event with buffer smaller than psb size
+				}
+			} else {
+				// no add to buffer
+				b->len = 0;
+			}
+			e->buffer_add++;
+			if (e->buffer_add > e->buffer_lookahead) {
+				// advance lookahead count, because we will
+				// not lookahead the buffer we have added
+				e->buffer_lookahead = e->buffer_add;
+			}
+		}
+	}
 
 	if (ptq->step_through_buffers)
 		ptq->stop = true;
@@ -1594,6 +1672,11 @@ static int intel_pt_setup_queue(struct intel_pt *pt,
 				return ret;
 		}
 
+		if (ptq) {
+			current_decode_cpu = ptq->cpu;
+			current_decode_tid = ptq->tid;
+		}
+
 		while (1) {
 			state = intel_pt_decode(ptq->decoder);
 			if (state->err) {
@@ -1734,8 +1817,153 @@ static int intel_pt_deliver_synth_event(struct intel_pt *pt,
 	return ret;
 }
 
+/* ========================= for pt_perf to filter ip ===========================*/
+static int intel_pt_parse_ip(struct intel_pt_queue *ptq, uint64_t ip, struct addr_location *al) {
+	// transfer to dso's addr
+	struct thread *thread;
+  bool nr = ptq->state->to_nr;
+  u8 cpumode = intel_pt_nr_cpumode(ptq, ip, nr);
+
+  if (!ip) return -EINVAL;
+
+  if (nr) {
+          if (ptq->pt->have_guest_sideband) {
+                  if (!ptq->guest_machine || ptq->guest_machine_pid != ptq->pid) {
+                          return -EINVAL;
+                  }
+          } else if ((!symbol_conf.guest_code && cpumode != PERF_RECORD_MISC_GUEST_KERNEL) ||
+                     intel_pt_get_guest(ptq)) {
+                  return -EINVAL;
+          }
+          thread = ptq->guest_thread;
+          if (!thread) {
+                  if (cpumode != PERF_RECORD_MISC_GUEST_KERNEL) {
+                          return -EINVAL;
+                  }
+                  thread = ptq->unknown_guest_thread;
+          }
+  } else {
+          thread = ptq->thread;
+          if (!thread) {
+                  if (cpumode != PERF_RECORD_MISC_KERNEL) {
+                          return -EINVAL;
+                  }
+                  thread = ptq->pt->unknown_thread;
+          }
+  }
+  if (!thread__find_map(thread, cpumode, ip, al) || !al->map->dso) {
+          return -EINVAL;
+  }
+	return 0;
+}
+
+static int intel_pt_parse_sym(struct intel_pt_queue *ptq, uint64_t ip, struct addr_location *al) {
+	if (intel_pt_parse_ip(ptq, ip, al))
+		return -EINVAL;
+	al->sym = map__find_symbol(al->map, al->addr);
+	return 0;
+}
+
+static bool intel_pt_is_schedule_func(struct addr_location *al) {
+	if (!al->sym) {
+		return false;
+	}
+	if (strcmp(al->sym->name, "__schedule") &&
+			strcmp(al->sym->name, "__sched_text_start")) {
+		return false;
+	}
+	return true;
+}
+
+static bool intel_pt_is_target_func_name(struct addr_location *al) {
+	if (!al->sym) {
+		return false;
+	}
+	if (!func_filter_match(al->sym->name)) {
+		return false;
+	}
+	return true;
+}
+
+static bool intel_pt_is_target_func_ip(struct addr_location *al) {
+	bool has_target = false;
+	for (size_t i = 0; i < fil_syms_size; ++i) {
+		if (fil_syms[i].start <= al->addr && fil_syms[i].end >= al->addr) {
+				has_target = true;
+				break;
+		}
+	}
+	return has_target;
+}
+
+static bool intel_pt_func_filter_by_sym(
+     struct addr_location *from_al,
+     struct addr_location *to_al,
+     struct intel_pt_queue *ptq) {
+	from_al->addr = to_al->addr = 0;
+	from_al->sym = to_al->sym = NULL;
+	intel_pt_parse_sym(ptq, ptq->state->from_ip, from_al);
+	intel_pt_parse_sym(ptq, ptq->state->to_ip, to_al);
+	if (intel_pt_is_target_func_name(from_al)
+		|| intel_pt_is_target_func_name(to_al)) {
+		return false;
+	} else if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
+		/* for schedule function of kernel */
+		if (intel_pt_is_schedule_func(from_al)
+				|| intel_pt_is_schedule_func(to_al)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static bool intel_pt_func_filter_by_ip(
+     struct addr_location *from_al,
+     struct addr_location *to_al,
+     struct intel_pt_queue *ptq) {
+	from_al->addr = to_al->addr = 0;
+	intel_pt_parse_ip(ptq, ptq->state->from_ip, from_al);
+	intel_pt_parse_ip(ptq, ptq->state->to_ip, to_al);
+
+	if (intel_pt_is_target_func_ip(from_al) ||
+				intel_pt_is_target_func_ip(to_al)) {
+			return false;
+	} else if (to_al->addr && to_al->map && __map__is_kernel(to_al->map)) {
+		from_al->sym = to_al->sym = NULL;
+		intel_pt_parse_sym(ptq, ptq->state->from_ip, from_al);
+		intel_pt_parse_sym(ptq, ptq->state->to_ip, to_al);
+		/* for schedule function of kernel */
+		if (intel_pt_is_schedule_func(from_al)
+				|| intel_pt_is_schedule_func(to_al)) {
+			return false;
+		}
+	}
+	return true;
+}
+
+static int intel_pt_synth_branch_sample_low(struct intel_pt_queue *ptq);
 static int intel_pt_synth_branch_sample(struct intel_pt_queue *ptq)
 {
+	// thread filter
+	if (thread__is_filter_by_tid(ptq->tid)) {
+		return 0;
+	}
+
+	// function filter
+	if (strlen(func_filter_str) > 0) {
+		struct addr_location from_al, to_al;
+		if (fil_syms_size > 0 &&
+				intel_pt_func_filter_by_ip(&from_al, &to_al, ptq)) {
+			return 0;
+		} else if (intel_pt_func_filter_by_sym(&from_al, &to_al, ptq)){
+			return 0;
+		}
+	}
+	return intel_pt_synth_branch_sample_low(ptq);
+}
+/* ========================= END: for pt_perf to filter ip ===========================*/
+
+static int intel_pt_synth_branch_sample_low(struct intel_pt_queue *ptq) {
 	struct intel_pt *pt = ptq->pt;
 	union perf_event *event = ptq->event_buf;
 	struct perf_sample sample = { .ip = 0, };
@@ -3014,6 +3242,10 @@ static int intel_pt_process_queues(struct intel_pt *pt, u64 timestamp)
 
 		intel_pt_set_pid_tid_cpu(pt, queue);
 
+		if (ptq) {
+			current_decode_cpu = ptq->cpu;
+			current_decode_tid = ptq->tid;
+		}
 		ret = intel_pt_run_decoder(ptq, &ts);
 
 		if (ret < 0) {
@@ -3577,6 +3809,8 @@ static int intel_pt_process_auxtrace_event(struct perf_session *session,
 		off_t data_offset;
 		int fd = perf_data__fd(session->data);
 		int err;
+
+		if (parallel_child_pid) return 0;
 
 		if (perf_data__is_pipe(session->data)) {
 			data_offset = 0;
@@ -4448,6 +4682,13 @@ int intel_pt_process_auxtrace_info(union perf_event *event,
 		err = auxtrace_queues__process_index(&pt->queues, session);
 	if (err)
 		goto err_delete_thread;
+	if (!parallel_child_pid) {
+		// redirect the pt debug log file for each child
+		char parallel_log_name[1024];
+		snprintf(parallel_log_name, 1024, "intel_pt_%d", parallel_file_count);
+		intel_pt_log_set_name(parallel_log_name);
+		intel_pt_log_reset();
+	}
 
 	if (pt->queues.populated)
 		pt->data_queued = true;

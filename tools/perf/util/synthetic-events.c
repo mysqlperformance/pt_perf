@@ -47,6 +47,8 @@
 
 unsigned int proc_map_timeout = DEFAULT_PROC_MAP_PARSE_TIMEOUT;
 
+struct evlist * global_evlist = NULL;
+
 int perf_tool__process_synth_event(struct perf_tool *tool,
 				   union perf_event *event,
 				   struct machine *machine,
@@ -869,8 +871,13 @@ int perf_event__synthesize_thread_map(struct perf_tool *tool,
 					       perf_thread_map__pid(threads, thread), 0,
 					       process, tool, machine,
 					       needs_mmap, mmap_data)) {
-			err = -1;
-			break;
+			// synthesize failed, this thread has exited, ignore it
+			if (!evsel__ignore_missing_thread2(global_evlist, threads, thread)) {
+			  err = -1;
+			  break;
+			} else {
+			  continue;
+			}
 		}
 
 		/*
