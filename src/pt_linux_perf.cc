@@ -56,8 +56,8 @@ void perf_record(PerfOption &opt) {
           ut_time_diff(t2, t1));
 
   if (opt.history == 1) {
-    printf("[ trace done, you can copy perf.data and the binary file \n"
-           "to another machine for analysis. ]\n");
+    printf("[ trace done, you can copy perf.data and the\n"
+           "  binary file to another machine for analysis. ]\n");
     exit(0);
   }
 }

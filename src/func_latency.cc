@@ -188,6 +188,9 @@ void ThreadJob::do_analyze() {
   // if current execution chain is wrong
   bool wrong_chain = true;
 
+  // if is not interruption from zero offset of target function
+  bool no_hw_int_from_head = true;
+
   /* clear execution chain */
   auto clear_context = [&]() {
     stack.clear();
@@ -247,7 +250,7 @@ void ThreadJob::do_analyze() {
   for (size_t i = 0; i < actions.size(); ++i) {
     Action &action = actions[i];
 
-    if (action.is_error) {
+    if (unlikely(action.is_error)) {
       /* encounter trace error, discard current execution chain,
        * set caller of exist child latency as unknown */
       stat.add_unknown_latency(child, "unknown");
@@ -256,14 +259,14 @@ void ThreadJob::do_analyze() {
       continue;
     }
 
-    if (action.to->offset == 0 && action.to_target) {
+    if (action.to->offset == 0 && action.to_target && no_hw_int_from_head) {
        /* new target function is called, add child function
         * of previous round */
-       if (target_begin && stack.size() == 2) {
+       if (unlikely(target_begin && stack.size() == 2)) {
          // add stat of no-return child
          add_one_child(&stack.back(), &action, true);
        }
-       if (!child.empty()) {
+       if (unlikely(!child.empty())) {
           /* there are not return action in last execution chain,
            * we just add the child latency information */
          if (!wrong_chain && target_begin) {
@@ -282,13 +285,13 @@ void ThreadJob::do_analyze() {
        stack.clear();
        stack.push_back(action);
        sched_in_target = sched_in_child = 0;
-       if (sched_begin) {
+       if (unlikely(sched_begin != nullptr)) {
          /* ERROR: the schedule in previous round is not finished
           * when the new target is called */
          report_error_action("schedule begin", sched_begin, param.verbose);
          sched_begin = nullptr;
        }
-       if (prev_target_error) {
+       if (unlikely(prev_target_error)) {
          /* if error occurs in previous round,
           * calculate the trace missing time */
          if (target_begin)
@@ -380,6 +383,15 @@ void ThreadJob::do_analyze() {
         assert(action.to_target);
         action.type = PT_ACTION_RETURN;
       }
+    }
+
+    if (unlikely(action.type == PT_ACTION_HW_INT &&
+          action.from_target && action.from->offset == 0)) {
+      /* the child function is called to target_func+0x0 by interruption and
+       * we should not give up this call chain */
+      no_hw_int_from_head = false;
+    } else {
+      no_hw_int_from_head = true;
     }
 
     /* process one execution chain */
@@ -816,6 +828,10 @@ static void check_parameter() {
 
   if (param.pt_config.find("cyc=1") == std::string::npos) {
     pt::ActionSet::out_of_order = true;
+  }
+
+  if (param.worker_num == 1) {
+    param.parallel_script = false;
   }
 }
 

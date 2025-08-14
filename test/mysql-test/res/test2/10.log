@@ -1,5 +1,5 @@
 %%%%%%%%%%%%% test text case [do_command]
-/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f do_command -d 0.1 -s -t -o -c 1 --script_format=text --history=3
+/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f do_command -d 0.1 -s -t -o -c 1 --script_format=text --history=3
 [ start 10 parallel workers ]
 [ parsed 538460 actions, trace errors: 193 ]
 [ real trace time: 0.15 seconds ]
@@ -157,7 +157,7 @@ sched count: 13884,   sched latency:  13187 ns, cpu percent: 917 %
 
 [33m=======================================================================================================================================================[0m
 %%%%%%%%%%%%% test text case [btr_cur_optimistic_update]
-/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_optimistic_update -d 0.1 -s -t -o -c 1 --script_format=text --history=3
+/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f btr_cur_optimistic_update -d 0.1 -s -t -o -c 1 --script_format=text --history=3
 [ start 10 parallel workers ]
 [ parsed 115707 actions, trace errors: 178 ]
 [ real trace time: 0.21 seconds ]
@@ -203,7 +203,7 @@ sched count: 13884,   sched latency:  13187 ns, cpu percent: 917 %
 
 [33m=======================================================================================================================================================[0m
 %%%%%%%%%%%%% test text case [log_writer]
-/disk2/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /disk2/xrb/git/pt_func_perf/test/mysql-test/mysqld -f log_writer -d 0.1 -s -t -o -c 1 --script_format=text --history=3
+/home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/../../func_latency -b /home/xierongbiao.xrb/xrb/git/pt_func_perf/test/mysql-test/mysqld -f log_writer -d 0.1 -s -t -o -c 1 --script_format=text --history=3
 [ start 10 parallel workers ]
 [ parsed 7465501 actions, trace errors: 177 ]
 [ real trace time: 0.22 seconds ]
